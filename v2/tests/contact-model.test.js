@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { normalizeIndianPhoneNumber } from "../src/whatsapp/client.js";
 import { renderTemplateBody } from "../src/whatsapp/templates.js";
-import { parseWebhookPayload, verifyWebhookSubscription } from "../src/whatsapp/webhook.js";
+import { parseWebhookPayload } from "../src/whatsapp/webhook.js";
 
-test("Contact, Mini Target & Unified WhatsApp Architecture Tests", async (t) => {
+test("Personal CRM Contact Domain Model & WhatsApp Invariants", async (t) => {
 
   // 1. Phone Number Normalization Specification
   await t.test("1. Phone Number Normalization handles all valid Indian formats and rejects invalid numbers", () => {
@@ -35,34 +35,20 @@ test("Contact, Mini Target & Unified WhatsApp Architecture Tests", async (t) => 
 
   // 2. Exact Rendered Body Persistence
   await t.test("2. renderTemplateBody renders exact Meta template texts without leakage or reconstruction", () => {
-    // onboarding_first_message
-    const body1 = renderTemplateBody("onboarding_first_message", {
-      contactPerson: "Ramesh Sharma",
+    // new_convo_1 (Personal CRM Generic Outreach)
+    const body1 = renderTemplateBody("new_convo_1", {
+      name: "Ramesh Sharma",
       userName: "Shah & Associates",
       templateParams: ["Ramesh Sharma", "Shah & Associates"]
     });
-    assert.ok(body1.includes("Hi Ramesh Sharma,"), "Missing client name");
-    assert.ok(body1.includes("Thank you for trusting Shah & Associates."), "Missing CA name");
-    assert.ok(body1.includes("To get started with your ITR filing"), "Missing body text");
+    assert.ok(body1.includes("Hi Ramesh Sharma,"), "Missing contact name");
+    assert.ok(body1.includes("Shah & Associates"), "Missing user name");
     assert.ok(!body1.includes("{{"), "Body contains raw template variables");
 
-    // loan_agent_first_outreach
-    const body2 = renderTemplateBody("loan_agent_first_outreach", {
-      contactPerson: "Anita Roy",
-      userName: "Apex Finance",
-      userPhone: "+91 9876543210",
-      templateParams: ["Anita Roy", "Apex Finance", "+91 9876543210"]
-    });
-    assert.ok(body2.includes("Namaste Anita Roy,"), "Missing borrower name");
-    assert.ok(body2.includes("Loan application has been initiated by Apex Finance."), "Missing agent name");
-    assert.ok(body2.includes("+91 9876543210"), "Missing contact phone");
+    // hello_world
+    const body2 = renderTemplateBody("hello_world");
+    assert.ok(body2.includes("Hello World"), "Missing hello world text");
     assert.ok(!body2.includes("{{"), "Body contains raw template variables");
-
-    // do_ca (Direct Outreach Gujarati/English)
-    const body3 = renderTemplateBody("do_ca");
-    assert.ok(body3.includes("Kem cho?"), "Missing greeting");
-    assert.ok(body3.includes("I came across your firm on Google"), "Missing body text");
-    assert.ok(!body3.includes("{{"), "Body contains raw template variables");
   });
 
   // 3. Webhook Parsing & Tenant Resolution Contract
@@ -91,7 +77,7 @@ test("Contact, Mini Target & Unified WhatsApp Architecture Tests", async (t) => 
                     from: "919876543210",
                     id: "wamid.HBgLMTIzNDU2",
                     timestamp: "1724500000",
-                    text: { body: "Sent the documents" },
+                    text: { body: "Sent the updates" },
                     type: "text"
                   }
                 ],
@@ -115,7 +101,7 @@ test("Contact, Mini Target & Unified WhatsApp Architecture Tests", async (t) => 
     assert.strictEqual(parsed.messages.length, 1);
     assert.strictEqual(parsed.messages[0].phoneNumberId, "WABA_PHONE_ID_001");
     assert.strictEqual(parsed.messages[0].profileName, "Sunil Verma");
-    assert.strictEqual(parsed.messages[0].text, "Sent the documents");
+    assert.strictEqual(parsed.messages[0].text, "Sent the updates");
     assert.strictEqual(parsed.messages[0].messageId, "wamid.HBgLMTIzNDU2");
 
     assert.strictEqual(parsed.statuses.length, 1);
@@ -125,69 +111,111 @@ test("Contact, Mini Target & Unified WhatsApp Architecture Tests", async (t) => 
   });
 
   // 4. Multi-Tenancy & Schema Verification
-  await t.test("4. Migration 0006 and schema.sql enforce multi-tenancy constraints and column additions", () => {
-    const migrationSql = fs.readFileSync(path.join(process.cwd(), "migrations", "0006_contacts_and_mini_targets.sql"), "utf8");
-    const masterSchemaSql = fs.readFileSync(path.join(process.cwd(), "src", "db", "schema.sql"), "utf8");
+  const baseDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+
+  await t.test("4. schema.sql and migrations enforce Personal CRM multi-tenancy constraints", () => {
+    const masterSchemaSql = fs.readFileSync(path.join(baseDir, "src", "db", "schema.sql"), "utf8");
+    const migrationSql = fs.readFileSync(path.join(baseDir, "migrations", "0001_personal_crm_schema.sql"), "utf8");
 
     // UNIQUE(user_id, phone_number) on contacts
-    assert.ok(migrationSql.includes("CONSTRAINT unq_user_contact_phone UNIQUE(user_id, phone_number)"), "Missing user_id scoped contact uniqueness in migration 0006");
     assert.ok(masterSchemaSql.includes("CONSTRAINT unq_user_contact_phone UNIQUE(user_id, phone_number)"), "Missing user_id scoped contact uniqueness in schema.sql");
+    assert.ok(migrationSql.includes("CONSTRAINT unq_user_contact_phone UNIQUE(user_id, phone_number)"), "Missing user_id scoped contact uniqueness in 0001 migration");
 
     // users.wa_phone_number_id
-    assert.ok(migrationSql.includes("wa_phone_number_id"), "Missing wa_phone_number_id in migration 0006");
     assert.ok(masterSchemaSql.includes("wa_phone_number_id"), "Missing wa_phone_number_id in schema.sql");
+    assert.ok(migrationSql.includes("wa_phone_number_id"), "Missing wa_phone_number_id in 0001 migration");
 
-    // loan_cases.contact_id
-    assert.ok(migrationSql.includes("contact_id"), "Missing contact_id in migration 0006");
-    assert.ok(masterSchemaSql.includes("contact_id"), "Missing contact_id in schema.sql");
-
-    // case_timeline provider_message_id and indexes
-    assert.ok(migrationSql.includes("provider_message_id"), "Missing provider_message_id in migration 0006");
-    assert.ok(masterSchemaSql.includes("unq_timeline_provider_msg"), "Missing unq_timeline_provider_msg index in schema.sql");
+    // messages table with provider_message_id index
+    assert.ok(masterSchemaSql.includes("CREATE TABLE IF NOT EXISTS messages"), "Missing messages table in schema.sql");
+    assert.ok(masterSchemaSql.includes("unq_messages_provider"), "Missing unq_messages_provider in schema.sql");
   });
 
   // 5. Backend Endpoints Registration
-  await t.test("5. Endpoint routing in index.js includes duplicate check and bulk preview routes", () => {
-    const indexJs = fs.readFileSync(path.join(process.cwd(), "src", "index.js"), "utf8");
+  await t.test("5. Endpoint routing in index.js includes Personal CRM routes", () => {
+    const indexJs = fs.readFileSync(path.join(baseDir, "src", "index.js"), "utf8");
+    assert.ok(indexJs.includes("/api/contacts"), "Missing /api/contacts route");
     assert.ok(indexJs.includes("/api/contacts/check"), "Missing /api/contacts/check route");
-    assert.ok(indexJs.includes("/api/cases/bulk-import/preview"), "Missing /api/cases/bulk-import/preview route");
     assert.ok(indexJs.includes("/api/contacts/:id"), "Missing /api/contacts/:id route");
+    assert.ok(indexJs.includes("/api/contacts/:id/messages/text"), "Missing text message route");
+    assert.ok(indexJs.includes("/api/contacts/:id/messages/template"), "Missing template message route");
+    assert.ok(indexJs.includes("/api/contacts/:id/requests"), "Missing create request route");
   });
 
-  // 6. Frontend Duplicate Modal & Confirmation UI
-  await t.test("6. dashboard.html and app.js implement the interactive Duplicate Contact Confirmation flow", () => {
-    const dashboardHtml = fs.readFileSync(path.join(process.cwd(), "public", "dashboard.html"), "utf8");
-    const appJs = fs.readFileSync(path.join(process.cwd(), "public", "js", "app.js"), "utf8");
-
-    assert.ok(dashboardHtml.includes("duplicateConfirmModalBackdrop"), "Missing duplicateConfirmModalBackdrop in dashboard.html");
-    assert.ok(dashboardHtml.includes("Contact already exists"), "Missing modal heading in dashboard.html");
-    assert.ok(dashboardHtml.includes("btnProceedDuplicateConfirm"), "Missing confirm button in dashboard.html");
-
-    assert.ok(appJs.includes("checkContactDuplicate"), "Missing checkContactDuplicate in app.js");
-    assert.ok(appJs.includes("promptDuplicateContactConfirm"), "Missing promptDuplicateContactConfirm in app.js");
+  // 6. Frontend Workspace & Case Detail Exact Message Rendering
+  await t.test("6. case-detail.js renders exact persisted message bodies and 2-way conversation stream", () => {
+    const caseDetailJs = fs.readFileSync(path.join(baseDir, "public", "js", "case-detail.js"), "utf8");
+    assert.ok(caseDetailJs.includes("m.content"), "case-detail.js not using m.content");
+    assert.ok(caseDetailJs.includes("renderMessages"), "case-detail.js missing renderMessages function");
+    assert.ok(caseDetailJs.includes("renderRequests"), "case-detail.js missing renderRequests function");
   });
 
-  // 7. Case Detail Exact Message Rendering
-  await t.test("7. case-detail.js renders exact persisted message bodies with Mini Target attribution", () => {
-    const caseDetailJs = fs.readFileSync(path.join(process.cwd(), "public", "js", "case-detail.js"), "utf8");
-    assert.ok(caseDetailJs.includes("const messageText = t.content || \"Message sent\";"), "case-detail.js not using t.content directly");
-    assert.ok(caseDetailJs.includes("miniTargetAttr"), "case-detail.js missing Mini Target attribution rendering");
-  });
+  // 7. Workspace Controller Contract & Runtime Execution
+  await t.test("7. handleGetContactWorkspace executes cleanly and returns full contact context, requests, and activity feed", async () => {
+    const { handleGetContactWorkspace } = await import("../src/api/contacts.js");
+    
+    // Mock database
+    const mockDb = {
+      async execute({ sql, args }) {
+        if (sql.includes("FROM contacts WHERE id = ?")) {
+          return {
+            rows: [{
+              id: "cnt_test_123",
+              user_id: "usr_1",
+              name: "Rahul Sharma",
+              phone_number: "919876543210",
+              email: "rahul@example.com",
+              created_at: "2026-09-20 00:00:00",
+              last_updated: "2026-09-20 00:00:00"
+            }]
+          };
+        }
+        if (sql.includes("FROM conversations")) {
+          return {
+            rows: [{
+              id: "conv_test_123",
+              user_id: "usr_1",
+              contact_id: "cnt_test_123",
+              channel: "whatsapp",
+              unread_count: 0
+            }]
+          };
+        }
+        if (sql.includes("FROM messages")) {
+          return { rows: [] };
+        }
+        if (sql.includes("FROM requests")) {
+          return { rows: [] };
+        }
+        if (sql.includes("FROM activities")) {
+          return {
+            rows: [{
+              id: "act_1",
+              title: "Target Created",
+              created_at: "2026-09-20 00:00:00"
+            }]
+          };
+        }
+        return { rows: [] };
+      }
+    };
 
-  // 8. Single Template Fetch & Unified UI Binding
-  await t.test("8. handleGetSingleCase provides authoritative template and case-detail.js uses it everywhere", () => {
-    const casesApiJs = fs.readFileSync(path.join(process.cwd(), "src", "api", "cases.js"), "utf8");
-    const caseDetailJs = fs.readFileSync(path.join(process.cwd(), "public", "js", "case-detail.js"), "utf8");
+    const mockContext = {
+      env: { DB: mockDb },
+      get: (key) => (key === "user" ? { id: "usr_1" } : null),
+      req: {
+        param: (key) => (key === "id" ? "cnt_test_123" : null)
+      },
+      json: (data, status = 200) => ({ status, data })
+    };
 
-    // Backend resolution in handleGetSingleCase
-    assert.ok(casesApiJs.includes("const template = {"), "cases.js must build authoritative template object");
-    assert.ok(casesApiJs.includes("renderedBody"), "template object must include renderedBody");
-    assert.ok(casesApiJs.includes("template,"), "loanCase must return template object");
-
-    // Frontend binding in case-detail.js
-    assert.ok(caseDetailJs.includes("c.template && (c.template.displayName || c.template.name)"), "Info bar must bind to authoritative template");
-    assert.ok(caseDetailJs.includes("c.template && c.template.renderedBody"), "Conversation card must bind to authoritative template renderedBody");
-    assert.ok(caseDetailJs.includes("currentCase.template && (currentCase.template.displayName || currentCase.template.name)"), "Activity history must bind to authoritative template");
+    const res = await handleGetContactWorkspace(mockContext);
+    if (res.status !== 200) {
+      console.error("handleGetContactWorkspace test error output:", res);
+    }
+    assert.strictEqual(res.status, 200, "handleGetContactWorkspace must return status 200");
+    assert.strictEqual(res.data.success, true, "handleGetContactWorkspace must return success: true");
+    assert.strictEqual(res.data.contact.name, "Rahul Sharma");
+    assert.ok(res.data.customerWindow, "handleGetContactWorkspace must compute customerWindow");
+    assert.ok(Array.isArray(res.data.activities), "handleGetContactWorkspace must return activities array");
   });
 });
-

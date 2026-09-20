@@ -33,8 +33,8 @@ if (typeof globalThis.localStorage === 'undefined') {
   };
 }
 
-// Import app.js to populate window
-const appJsPath = path.join(process.cwd(), 'public', 'js', 'app.js');
+const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const appJsPath = path.join(rootDir, 'public', 'js', 'app.js');
 await import(`file://${appJsPath}`);
 const {
   getDisplayStatus,

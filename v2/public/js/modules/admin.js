@@ -40,21 +40,9 @@ export function renderMappingConfiguratorMatrix(documentCatalog = [], loanProduc
   });
   thead.appendChild(headerRow);
 
-  const isCA =
-    typeof getVariantKey === "function" && getVariantKey() === "ca";
-  const products = isCA
-    ? [
-        "GST — Monthly Returns (GSTR-1 & 3B)",
-        "GST — Annual Return (GSTR-9 & 9C)",
-        "GST — Registration Intake",
-        "ITR — Salaried (ITR-1 / 2)",
-        "ITR — Business (ITR-3 / 4)",
-        "ITR — Capital Gains & NRI",
-        "ITR — Tax Audit (Form 3CD)",
-      ]
-    : loanProductsList && loanProductsList.length > 0
+  const products = loanProductsList && loanProductsList.length > 0
     ? loanProductsList.map((p) => p.label)
-    : ["Home Loan Pack", "LAP (Property Loan)", "Business Loan", "Personal Loan Pack"];
+    : ["Standard Intake Pack", "Business Intake", "Follow-up Pack"];
 
   products.forEach((pLabel) => {
     const tr = document.createElement("tr");

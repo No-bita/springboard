@@ -1,69 +1,61 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { verify } from "hono/jwt";
 
 import { handleLogin, handleRegister } from "./api/auth.js";
-import { handleSessionRequest } from "./api/session.js";
-import { handleUploadUrlRequest, handleDirectUpload } from "./api/upload.js";
 import { handleWebhookVerify, handleWebhookEvent } from "./api/webhook.js";
-import { handleUploadComplete } from "./api/ocr.js";
-import { 
-  handleCreateCase, 
-  handleGetCases, 
-  handleGetSingleCase,
-  handleEditCase, 
-  handleDeleteCase, 
-  handleUpdateStatus, 
-  handleFollowUp, 
-  handleGetTimeline, 
-  handleAddTimelineNote, 
-  handleDocumentCatalog, 
-  handleRejectUpload,
-  handleGetLoanProducts,
-  handleAddLoanProduct,
-  handleGetProductMappings,
-  handleSaveProductMappings,
-  handleGenerateReport,
-  handleAgentUploadUrl,
-  handleAgentUploadComplete,
-  handleRetryWhatsApp,
-  handleAddDocumentRequirement,
-  handleSendWhatsAppText,
-  handleSendWhatsAppTemplate,
-  handleBulkImportCases,
-  handleCheckContact,
-  handleBulkImportPreview,
-  handleBulkPrecheck
-} from "./api/cases.js";
+import {
+  handleGetContacts,
+  handleCreateContact,
+  handleGetContactWorkspace,
+  handleUpdateContact,
+  handleDeleteContact,
+  handleCheckContactPhone,
+} from "./api/contacts.js";
+import {
+  handleSendContactText,
+  handleSendContactTemplate,
+  handleSendMessage,
+} from "./api/conversations.js";
+import {
+  handleCreateRequest,
+  handleUpdateRequestStatus,
+  handleUpdateRequestItem,
+  handleAddRequestItem,
+} from "./api/requests.js";
+import {
+  handleGetContactActivities,
+  handleAddContactNote,
+} from "./api/activities.js";
 import {
   handleGetCredits,
   handleRechargeCredits,
-  handleAdminAdjustCredits
+  handleAdminAdjustCredits,
 } from "./api/credits.js";
-
-import { 
-  handleGetAdminDashboard, 
-  handleGetAdminFailures, 
-  handleDeleteAdminFailure, 
-  handleClearAllFailures,
-  handleGetAdminAnalyticsData,
-  handleGetAdminAnalyticsDashboard
-} from "./api/admin.js";
 import {
   handleGetTemplates,
   handleCreateTemplate,
-  handleDeleteTemplate
+  handleDeleteTemplate,
 } from "./api/templates.js";
 import {
   handleCreateSchedule,
   handleGetSchedules,
   handleCancelSchedule,
-  handleRetryOccurrence
+  handleRetryOccurrence,
 } from "./api/schedules.js";
+import {
+  handleGetAdminAnalyticsData,
+  handleGetAdminAnalyticsDashboard,
+  handleGetAdminFailures,
+  handleDeleteAdminFailure,
+  handleClearAllFailures,
+} from "./api/admin.js";
+
+import { handleSessionRequest } from "./api/session.js";
+import { handleUploadUrlRequest, handleDirectUpload } from "./api/upload.js";
+import { handleBulkImportCases, handleBulkPrecheck } from "./api/cases.js";
+
 import { scanAndClaimDueOccurrences } from "./scheduler/scanner.js";
 import { processScheduledOccurrence, handleQueueBatch } from "./scheduler/consumer.js";
 import { getDbClient } from "./db/client.js";
-
 import { authMiddleware, adminOnlyMiddleware } from "./middleware/auth.js";
 import { corsMiddleware } from "./middleware/cors.js";
 
@@ -79,162 +71,105 @@ app.post("/api/auth/register", handleRegister);
 app.get("/app", (c) => c.redirect("/dashboard.html"));
 app.get("/dashboard", (c) => c.redirect("/dashboard.html"));
 app.get("/early-access", (c) => c.redirect("/register.html"));
-app.get("/loan-agent", (c) => c.redirect("/index.html?variant=loan_agent"));
-app.get("/ca", (c) => c.redirect("/index.html?variant=ca"));
 
-// Health Check & Analytics Tracking API
-app.get("/api/health", (c) => c.text("Collectrr v2 API Running"));
-app.post("/api/events/track", async (c) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    const eventName = body.event || "unknown_event";
-    const userAgent = c.req.header("user-agent") || "";
-    const ip = c.req.header("cf-connecting-ip") || "127.0.0.1";
-    console.log(`[FAKE DOOR TRACK] Event: ${eventName} | IP: ${ip} | UA: ${userAgent}`);
+// Health Check API
+app.get("/api/health", (c) => c.text("Collectr Personal CRM API Running"));
 
-    if (c.env.DB) {
-      await c.env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS analytics_events (
-          id TEXT PRIMARY KEY,
-          event_name TEXT NOT NULL,
-          ip_address TEXT,
-          user_agent TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run().catch(() => {});
-
-      await c.env.DB.prepare(`
-        INSERT INTO analytics_events (id, event_name, ip_address, user_agent)
-        VALUES (?, ?, ?, ?)
-      `).bind(`evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, eventName, ip, userAgent).run().catch(() => {});
-    }
-
-    return c.json({ success: true, message: "Interest recorded" });
-  } catch (err) {
-    return c.json({ success: true, message: "Interest recorded" });
-  }
-});
-
-// Public Client Upload Flow
-app.get("/api/session/:token", handleSessionRequest);
-app.post("/api/upload-url/:token", handleUploadUrlRequest);
-app.post("/api/direct-upload/:token", handleDirectUpload);
-app.post("/api/upload-complete/:token", handleUploadComplete);
-
-// Public Webhook Routes
+// Public Webhook Routes (Meta WhatsApp)
 app.get("/api/webhook", handleWebhookVerify);
 app.post("/api/webhook", handleWebhookEvent);
 
-// Protected API Routes (Requires Auth Credentials)
-app.use("/api/admin/*", authMiddleware, adminOnlyMiddleware);
-app.use("/api/cases", authMiddleware);
-app.use("/api/cases/*", authMiddleware);
-app.use("/api/loan-products", authMiddleware);
-app.use("/api/document-catalog", authMiddleware);
-app.use("/api/reject-upload", authMiddleware);
+// Public Upload & Session Routes
+app.get("/api/session/:token", handleSessionRequest);
+app.post("/api/upload-url/:token", handleUploadUrlRequest);
+app.post("/api/direct-upload/:token", handleDirectUpload);
 
+// Protected API Routes (Requires Auth Credentials)
 app.use("/api/contacts", authMiddleware);
 app.use("/api/contacts/*", authMiddleware);
-
-app.post("/api/contacts/check", handleCheckContact);
-app.get("/api/contacts/:id", handleGetSingleCase);
-app.get("/api/cases", handleGetCases);
-app.get("/api/cases/:id", handleGetSingleCase);
-app.post("/api/cases", handleCreateCase);
-app.post("/api/cases/bulk-import", handleBulkImportCases);
-app.post("/api/cases/bulk-precheck", handleBulkPrecheck);
-app.post("/api/cases/bulk-import/preview", handleBulkImportPreview);
-app.patch("/api/cases/:id", handleEditCase);
-app.delete("/api/cases/:id", handleDeleteCase);
-app.patch("/api/cases/:id/status", handleUpdateStatus);
-app.post("/api/cases/:id/follow-up", handleFollowUp);
-app.get("/api/cases/:id/timeline", handleGetTimeline);
-app.post("/api/cases/:id/timeline", handleAddTimelineNote);
-app.post("/api/cases/:id/agent-upload-url", handleAgentUploadUrl);
-app.post("/api/cases/:id/agent-upload-complete", handleAgentUploadComplete);
-app.post("/api/cases/:id/generate-report", handleGenerateReport);
-app.post("/api/cases/:id/retry-whatsapp", handleRetryWhatsApp);
-app.post("/api/cases/:id/whatsapp", handleSendWhatsAppText);
-app.post("/api/cases/:id/send-whatsapp-text", handleSendWhatsAppText);
-app.post("/api/cases/:id/send-whatsapp-template", handleSendWhatsAppTemplate);
-app.post("/api/cases/:id/add-requirement", handleAddDocumentRequirement);
-
-app.get("/api/loan-products", handleGetLoanProducts);
-app.post("/api/loan-products", handleAddLoanProduct);
-app.get("/api/loan-product-mappings", handleGetProductMappings);
-app.post("/api/admin/loan-product-mappings", authMiddleware, handleSaveProductMappings);
-app.put("/api/admin/loan-product-mappings", authMiddleware, handleSaveProductMappings);
-app.get("/api/document-catalog", handleDocumentCatalog);
-app.post("/api/reject-upload", handleRejectUpload);
-
-// Freemium Credits & Wallet Endpoints
-app.get("/api/user/credits", authMiddleware, handleGetCredits);
-app.post("/api/user/recharge", authMiddleware, handleRechargeCredits);
-app.post("/api/admin/credits/adjust", authMiddleware, handleAdminAdjustCredits);
-
-// Message Templates Endpoints
-app.get("/api/templates", authMiddleware, handleGetTemplates);
-app.post("/api/admin/templates", authMiddleware, adminOnlyMiddleware, handleCreateTemplate);
-app.delete("/api/admin/templates/:id", authMiddleware, adminOnlyMiddleware, handleDeleteTemplate);
-
-// Document Proxy
-app.get("/api/documents/*", authMiddleware, async (c) => {
-  const key = c.req.path.substring("/api/documents/".length);
-  try {
-    const object = await c.env.DOCUMENT_BUCKET.get(key);
-    if (!object) {
-      return c.text("File not found", 404);
-    }
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("etag", object.httpEtag);
-    if (!headers.get("Content-Type")) {
-      headers.set("Content-Type", "application/octet-stream");
-    }
-    return new Response(object.body, { headers });
-  } catch(e) {
-    console.error("Error fetching from R2:", e);
-    return c.text("Internal Error", 500);
-  }
-});
-
-// Schedules Endpoints
+app.use("/api/cases", authMiddleware);
+app.use("/api/cases/*", authMiddleware);
+app.use("/api/requests/*", authMiddleware);
 app.use("/api/schedules", authMiddleware);
 app.use("/api/schedules/*", authMiddleware);
+app.use("/api/templates", authMiddleware);
+app.use("/api/user/*", authMiddleware);
+app.use("/api/admin/*", authMiddleware, adminOnlyMiddleware);
+
+// Contacts Endpoints
+app.get("/api/contacts", handleGetContacts);
+app.post("/api/contacts", handleCreateContact);
+app.post("/api/contacts/check", handleCheckContactPhone);
+app.get("/api/contacts/:id", handleGetContactWorkspace);
+app.patch("/api/contacts/:id", handleUpdateContact);
+app.delete("/api/contacts/:id", handleDeleteContact);
+
+// Conversations & Messaging Endpoints
+app.post("/api/contacts/:id/messages", handleSendMessage);
+app.post("/api/contacts/:id/messages/text", handleSendContactText);
+app.post("/api/contacts/:id/messages/template", handleSendContactTemplate);
+
+// Requests Endpoints
+app.post("/api/contacts/:id/requests", handleCreateRequest);
+app.patch("/api/requests/:id/status", handleUpdateRequestStatus);
+app.post("/api/requests/:id/items", handleAddRequestItem);
+app.patch("/api/requests/:requestId/items/:itemId", handleUpdateRequestItem);
+
+// Activities Endpoints
+app.get("/api/contacts/:id/activities", handleGetContactActivities);
+app.post("/api/contacts/:id/activities/note", handleAddContactNote);
+
+// Message Templates Endpoints
+app.get("/api/templates", handleGetTemplates);
+app.post("/api/admin/templates", handleCreateTemplate);
+app.delete("/api/admin/templates/:id", handleDeleteTemplate);
+
+// Schedules Endpoints
 app.get("/api/schedules", handleGetSchedules);
 app.post("/api/schedules", handleCreateSchedule);
 app.delete("/api/schedules/:id", handleCancelSchedule);
 app.post("/api/schedules/occurrences/:id/retry", handleRetryOccurrence);
 
-// Admin Analytics & Observability
-app.get("/admin/analytics", handleGetAdminAnalyticsDashboard);
+// User Credits Endpoints
+app.get("/api/user/credits", handleGetCredits);
+app.post("/api/user/recharge", handleRechargeCredits);
+app.post("/api/admin/credits/adjust", handleAdminAdjustCredits);
+
+// Admin Analytics Endpoints
 app.get("/api/admin/analytics", handleGetAdminAnalyticsData);
-app.get("/dd", handleGetAdminDashboard);
+app.get("/api/admin/analytics/dashboard", handleGetAdminAnalyticsDashboard);
 app.get("/api/admin/failures", handleGetAdminFailures);
-app.delete("/api/admin/failures", handleClearAllFailures);
 app.delete("/api/admin/failures/:id", handleDeleteAdminFailure);
+app.post("/api/admin/failures/clear", handleClearAllFailures);
 
-// Cloudflare Scheduled (Cron) & Queue Handlers
-export async function scheduled(controller, env, ctx) {
+// Backward Compatibility Aliases for Frontend
+app.get("/api/cases", handleGetContacts);
+app.get("/api/cases/:id", handleGetContactWorkspace);
+app.post("/api/cases", handleCreateContact);
+app.patch("/api/cases/:id/status", handleUpdateContact);
+app.post("/api/cases/bulk-import", handleBulkImportCases);
+app.post("/api/cases/bulk-precheck", handleBulkPrecheck);
+app.get("/api/user/profile", async (c) => {
+  const user = c.get("user");
+  const db = getDbClient(c.env);
+  const res = await db.execute({ sql: "SELECT id, username, role, credit_balance FROM users WHERE id = ?", args: [user.id] });
+  return c.json({ success: true, user: res.rows[0] || user });
+});
+
+app.scheduled = async (event, env, ctx) => {
   const db = getDbClient(env);
-  const queue = env.SCHEDULE_QUEUE;
-  return await scanAndClaimDueOccurrences(db, queue, 50, async (payload) => {
-    await processScheduledOccurrence(payload.occurrenceId, env, db);
-  });
-}
-
-export async function queue(batch, env, ctx) {
-  const db = getDbClient(env);
-  return await handleQueueBatch(batch, env, ctx, db);
-}
-
-app.scheduled = scheduled;
-app.queue = queue;
-
-export default {
-  fetch: app.fetch,
-  request: (...args) => app.request(...args),
-  scheduled,
-  queue,
-  app
+  try {
+    await scanAndClaimDueOccurrences(env, db);
+  } catch (err) {
+    console.error("[CRON] Scanner execution error:", err);
+  }
 };
+
+app.queue = async (batch, env, ctx) => {
+  const db = getDbClient(env);
+  await handleQueueBatch(batch, env, ctx, db);
+};
+
+export { app };
+export default app;
+

@@ -1,21 +1,19 @@
 /**
  * Scheduler Queue Consumer
  * Consumes occurrence messages from Cloudflare Queue, validates business eligibility
- * and JIT credit balance, and delegates dispatching to the existing WhatsApp pipeline.
+ * and JIT credit balance, and delegates dispatching to the existing messaging pipeline.
  */
 
-import { executeWhatsAppMessagingPipeline } from "../api/cases.js";
+import { executeWhatsAppMessagingPipeline } from "../whatsapp/pipeline.js";
 import { executeEmailMessagingPipeline } from "../email/pipeline.js";
-import { MESSAGE_COST_PAISE } from "../api/credits.js";
-
-const TERMINAL_CASE_STATUSES = ["closed", "disbursed"];
+import { MESSAGE_COST_PAISE } from "../whatsapp/pipeline.js";
 
 async function finalizeOneOffSchedule(db, scheduleId) {
   if (!scheduleId) return;
   try {
     await db.execute({
       sql: "UPDATE schedules SET status = 'completed', next_run_utc = NULL WHERE id = ?",
-      args: [scheduleId]
+      args: [scheduleId],
     });
   } catch (_) {}
 }
@@ -23,19 +21,21 @@ async function finalizeOneOffSchedule(db, scheduleId) {
 export async function processScheduledOccurrence(occurrenceId, env, db) {
   if (!occurrenceId) return { handled: false, reason: "missing_id" };
 
-  // 1. Fetch occurrence with joined schedule
+  // 1. Fetch occurrence with joined schedule and contact
   const queryRes = await db.execute({
     sql: `
       SELECT o.id, o.schedule_id, o.occurrence_key, o.scheduled_for_utc, o.operational_status,
              o.channel as occ_channel, o.recipient_phone, o.recipient_email,
-             s.user_id, s.case_id, s.contact_id, s.phone_number, s.channel as schedule_channel,
-             s.template_name, s.template_params, s.schedule_type, s.recurrence_interval,
-             s.timezone, s.status as schedule_status
+             s.user_id, s.contact_id, s.case_id, s.request_id, s.channel as schedule_channel,
+             s.template_id, s.message_body, s.payload_snapshot,
+             s.schedule_type, s.recurrence_interval, s.timezone, s.status as schedule_status,
+             c.name as contact_name, c.phone_number as contact_phone, c.email as contact_email
       FROM scheduled_occurrences o
       JOIN schedules s ON o.schedule_id = s.id
+      LEFT JOIN contacts c ON c.id = s.contact_id
       WHERE o.id = ?
     `,
-    args: [occurrenceId]
+    args: [occurrenceId],
   });
 
   const row = queryRes.rows?.[0];
@@ -47,215 +47,152 @@ export async function processScheduledOccurrence(occurrenceId, env, db) {
   if (row.schedule_status === "cancelled") {
     await db.execute({
       sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'cancelled', executed_at = datetime('now') WHERE id = ?",
-      args: [occurrenceId]
+      args: [occurrenceId],
     });
     return { handled: true, status: "skipped", reason: "cancelled" };
   }
 
-  if (row.schedule_status === "paused") {
-    await db.execute({
-      sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'schedule_paused', executed_at = datetime('now') WHERE id = ?",
-      args: [occurrenceId]
-    });
-    return { handled: true, status: "skipped", reason: "schedule_paused" };
+  if (row.case_id) {
+    const caseRes = await db.execute({
+      sql: "SELECT status FROM loan_cases WHERE id = ? LIMIT 1",
+      args: [row.case_id],
+    }).catch(() => ({ rows: [] }));
+    if (caseRes.rows?.[0]?.status === "closed") {
+      await db.execute({
+        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'case_closed', executed_at = datetime('now') WHERE id = ?",
+        args: [occurrenceId],
+      });
+      await finalizeOneOffSchedule(db, row.schedule_id);
+      return { handled: true, status: "skipped", reason: "case_closed" };
+    }
+  }
+
+  if (row.request_id) {
+    const reqRes = await db.execute({
+      sql: "SELECT status FROM requests WHERE id = ? LIMIT 1",
+      args: [row.request_id],
+    }).catch(() => ({ rows: [] }));
+    if (reqRes.rows?.[0]?.status === "completed" || reqRes.rows?.[0]?.status === "cancelled") {
+      await db.execute({
+        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'request_completed', executed_at = datetime('now') WHERE id = ?",
+        args: [occurrenceId],
+      });
+      await finalizeOneOffSchedule(db, row.schedule_id);
+      return { handled: true, status: "skipped", reason: "request_completed" };
+    }
   }
 
   if (row.operational_status === "completed" || row.operational_status === "skipped" || row.operational_status === "unknown") {
     return { handled: true, status: row.operational_status, alreadyDone: true };
   }
 
-  // 3. Case Eligibility Check (if linked to a case)
-  let caseContactPerson = null;
-  let caseItem = null;
-  if (row.case_id) {
-    const caseRes = await db.execute({
-      sql: "SELECT id, status, contact_person, phone_number FROM loan_cases WHERE id = ?",
-      args: [row.case_id]
-    });
-    caseItem = caseRes.rows?.[0];
+  // 3. Contact Resolution
+  const contact = {
+    id: row.contact_id,
+    name: row.contact_name || "there",
+    phone_number: row.recipient_phone || row.contact_phone,
+    email: row.recipient_email || row.contact_email,
+  };
 
-    if (!caseItem) {
-      await db.execute({
-        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'case_not_found', executed_at = datetime('now') WHERE id = ?",
-        args: [occurrenceId]
-      });
-      return { handled: true, status: "skipped", reason: "case_not_found" };
-    }
-
-    if (TERMINAL_CASE_STATUSES.includes(String(caseItem.status).toLowerCase())) {
-      // Case reached terminal state: skip occurrence and mark schedule completed
-      await db.execute({
-        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'case_closed', executed_at = datetime('now') WHERE id = ?",
-        args: [occurrenceId]
-      });
-      await finalizeOneOffSchedule(db, row.schedule_id);
-      return { handled: true, status: "skipped", reason: "case_closed" };
-    }
-
-    caseContactPerson = caseItem.contact_person;
-  }
-
-  // 4. Channel Resolution & Destination Validation
-  const channel = String(row.occ_channel || row.schedule_channel || "whatsapp").toLowerCase();
-
-  let cleanedPhone = "";
-  let recipientEmail = "";
-
-  if (channel === "email") {
-    recipientEmail = String(row.recipient_email || "").trim();
-    if (!recipientEmail && row.contact_id) {
-      const contactRes = await db.execute({
-        sql: "SELECT email FROM contacts WHERE id = ?",
-        args: [row.contact_id]
-      });
-      recipientEmail = String(contactRes.rows?.[0]?.email || "").trim();
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!recipientEmail || !emailRegex.test(recipientEmail)) {
-      await db.execute({
-        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'invalid_email', executed_at = datetime('now') WHERE id = ?",
-        args: [occurrenceId]
-      });
-      await finalizeOneOffSchedule(db, row.schedule_id);
-      return { handled: true, status: "skipped", reason: "invalid_email" };
-    }
-  } else {
-    // WhatsApp default
-    const rawPhone = row.recipient_phone || row.phone_number || caseItem?.phone_number || "";
-    cleanedPhone = rawPhone.replace(/\D/g, "");
-    if (!cleanedPhone || cleanedPhone.length < 10) {
-      await db.execute({
-        sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'invalid_phone', executed_at = datetime('now') WHERE id = ?",
-        args: [occurrenceId]
-      });
-      await finalizeOneOffSchedule(db, row.schedule_id);
-      return { handled: true, status: "skipped", reason: "invalid_phone" };
-    }
-  }
-
-  // 5. User & JIT Credit Check (checked immediately before execution)
+  // 4. User & JIT Credit Check
   const userRes = await db.execute({
     sql: "SELECT id, username, credit_balance FROM users WHERE id = ?",
-    args: [row.user_id]
+    args: [row.user_id],
   });
-  const user = userRes.rows?.[0] || { id: row.user_id, username: "Collectrr", credit_balance: 900 };
+  const user = userRes.rows?.[0] || { id: row.user_id, username: "Collectr", credit_balance: 900 };
 
-  const currentBalance = (user.credit_balance !== undefined && user.credit_balance !== null)
-    ? Number(user.credit_balance)
-    : 900;
-
+  const currentBalance = Number(user.credit_balance || 0);
   if (currentBalance < MESSAGE_COST_PAISE) {
-    // Insufficient credits: skip this occurrence and finalize schedule
     await db.execute({
       sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'insufficient_credits', executed_at = datetime('now') WHERE id = ?",
-      args: [occurrenceId]
+      args: [occurrenceId],
     });
     await finalizeOneOffSchedule(db, row.schedule_id);
     return { handled: true, status: "skipped", reason: "insufficient_credits" };
   }
 
-  // Parse template parameters
-  let parsedParams = [];
-  if (row.template_params) {
+  // Parse payload snapshot if available
+  let snapshot = {};
+  if (row.payload_snapshot) {
     try {
-      parsedParams = typeof row.template_params === "string" ? JSON.parse(row.template_params) : row.template_params;
+      snapshot = typeof row.payload_snapshot === "string" ? JSON.parse(row.payload_snapshot) : row.payload_snapshot;
     } catch (_) {
-      parsedParams = [];
+      snapshot = {};
     }
   }
 
-  // 6. Dispatch via respective channel adapter
+  const channel = String(row.occ_channel || row.schedule_channel || "whatsapp").toLowerCase();
   const referenceId = `occ_${occurrenceId}`;
-  const contactPerson = caseContactPerson || "Client";
 
-  let caseToken = "verify";
-  if (row.case_id) {
-    const tokenRes = await db.execute({
-      sql: "SELECT token FROM secure_tokens WHERE case_id = ? ORDER BY expires_at DESC LIMIT 1",
-      args: [row.case_id]
-    });
-    if (tokenRes.rows?.[0]?.token) {
-      caseToken = tokenRes.rows[0].token;
-    }
-  }
-
+  // 5. Dispatch via Channel Pipeline
   let pipeRes;
   if (channel === "email") {
     pipeRes = await executeEmailMessagingPipeline(
       db,
       user,
-      recipientEmail,
-      row.template_name,
-      contactPerson,
-      caseToken,
+      contact.email,
+      snapshot.templateId || row.template_id || "general_email",
+      contact.name,
+      "verify",
       env,
       referenceId,
-      parsedParams,
+      snapshot.templateParams || [],
       row.contact_id,
-      row.case_id
+      row.request_id
     );
   } else {
-    pipeRes = await executeWhatsAppMessagingPipeline(
+    // WhatsApp pipeline
+    pipeRes = await executeWhatsAppMessagingPipeline({
       db,
       user,
-      cleanedPhone,
-      row.template_name,
-      contactPerson,
-      caseToken,
-      env,
+      contact,
+      requestId: row.request_id,
+      templateId: snapshot.templateId || row.template_id,
+      messageBody: snapshot.messageBody || row.message_body,
+      templateParams: snapshot.templateParams || [],
       referenceId,
-      parsedParams,
-      row.contact_id,
-      row.case_id
-    );
+      env,
+    });
   }
 
-  // 7. Settle Terminal Status
+  // 6. Settle Terminal Status and Link Message
   if (pipeRes?.success) {
     await db.execute({
-      sql: "UPDATE scheduled_occurrences SET operational_status = 'completed', provider_message_id = ?, executed_at = datetime('now') WHERE id = ?",
-      args: [pipeRes.providerMsgId || null, occurrenceId]
+      sql: "UPDATE scheduled_occurrences SET operational_status = 'completed', provider_message_id = ?, message_id = ?, executed_at = datetime('now') WHERE id = ?",
+      args: [pipeRes.providerMsgId || null, pipeRes.messageId || null, occurrenceId],
     });
+    if (row.case_id) {
+      await db.execute({
+        sql: "UPDATE loan_cases SET whatsapp_delivery_status = 'sent' WHERE id = ?",
+        args: [row.case_id],
+      }).catch(() => {});
+    }
     await finalizeOneOffSchedule(db, row.schedule_id);
-    return { handled: true, status: "completed", providerMsgId: pipeRes.providerMsgId };
+    return { handled: true, status: "completed", providerMsgId: pipeRes.providerMsgId, messageId: pipeRes.messageId };
   }
 
-  // Active consumer in-flight duplicate: yield and do not overwrite occurrence to unknown
   if (pipeRes?.inFlight) {
     return { handled: true, status: "in_flight_duplicate", inFlight: true };
   }
 
   if (pipeRes?.error === "WHATSAPP_TIMEOUT" || pipeRes?.error === "EMAIL_TIMEOUT" || pipeRes?.ambiguous) {
-    // Ambiguous network outcome: strictly set to unknown, do NOT auto-retry
     await db.execute({
       sql: "UPDATE scheduled_occurrences SET operational_status = 'unknown', last_error = ?, executed_at = datetime('now') WHERE id = ?",
-      args: [pipeRes.message || "Provider timeout / ambiguous in-flight dispatch", occurrenceId]
+      args: [pipeRes.message || "Provider timeout", occurrenceId],
     });
     await finalizeOneOffSchedule(db, row.schedule_id);
-    return { handled: true, status: "unknown", error: pipeRes?.error || "GATEWAY_TIMEOUT" };
+    return { handled: true, status: "unknown", error: pipeRes?.error };
   }
 
-  if (pipeRes?.insufficientCredits) {
-    await db.execute({
-      sql: "UPDATE scheduled_occurrences SET operational_status = 'skipped', skip_reason = 'insufficient_credits', executed_at = datetime('now') WHERE id = ?",
-      args: [occurrenceId]
-    });
-    await finalizeOneOffSchedule(db, row.schedule_id);
-    return { handled: true, status: "skipped", reason: "insufficient_credits" };
-  }
-
-  // Explicit provider failure
+  // Failed
   await db.execute({
     sql: "UPDATE scheduled_occurrences SET operational_status = 'failed', last_error = ?, executed_at = datetime('now') WHERE id = ?",
-    args: [pipeRes?.message || "Outreach message delivery failed", occurrenceId]
+    args: [pipeRes?.message || "Dispatch failed", occurrenceId],
   });
   await finalizeOneOffSchedule(db, row.schedule_id);
   return { handled: true, status: "failed", error: pipeRes?.error || "DISPATCH_FAILED" };
 }
 
-/**
- * Cloudflare Queue batch handler
- */
 export async function handleQueueBatch(batch, env, ctx, db) {
   const messages = batch?.messages || [];
   for (const message of messages) {
@@ -267,7 +204,6 @@ export async function handleQueueBatch(batch, env, ctx, db) {
         console.error(`[QUEUE CONSUMER] Error processing occurrence ${occurrenceId}:`, err);
       }
     }
-    // Always acknowledge message to prevent infinite retry loop
     if (typeof message?.ack === "function") {
       message.ack();
     }

@@ -12,101 +12,147 @@ test('Bulk Client Import UI, Parser & Architecture Tests', async (t) => {
     const htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
     assert.ok(htmlContent.includes('id="btnOpenBulkImportModal"'), 'btnOpenBulkImportModal trigger button must exist');
-    assert.ok(htmlContent.includes('id="bulkImportModalBackdrop"'), 'bulkImportModalBackdrop modal must exist');
-    assert.ok(htmlContent.includes('Expected File Format (.csv or .tsv)'), 'Sample format card must exist to guide users');
-    assert.ok(htmlContent.includes('id="bulkFileView"'), 'bulkFileView container must exist');
-    assert.ok(htmlContent.includes('id="bulkFileInput"'), 'bulkFileInput file picker must exist');
-    assert.ok(htmlContent.includes('id="bulkDropzone"'), 'bulkDropzone drag and drop target must exist');
-    assert.ok(htmlContent.includes('id="bulkCategorySelect"'), 'bulkCategorySelect dropdown must exist');
-    assert.ok(htmlContent.includes('id="bulkTemplateSelect"'), 'bulkTemplateSelect dropdown must exist');
-    assert.ok(htmlContent.includes('id="bulkHasHeaderCheck"'), 'bulkHasHeaderCheck checkbox must exist');
-    assert.ok(htmlContent.includes('id="bulkSendWhatsAppCheck"'), 'bulkSendWhatsAppCheck checkbox must exist');
-    assert.ok(htmlContent.includes('id="bulkPreviewTableBody"'), 'bulkPreviewTableBody table element must exist');
-    assert.ok(htmlContent.includes('id="btnExecuteBulkImport"'), 'btnExecuteBulkImport submit button must exist');
+    assert.ok(htmlContent.includes('id="bulkImportBackdrop"'), 'bulkImportBackdrop modal must exist');
+    assert.ok(htmlContent.includes('id="bulkCsvTextarea"'), 'bulkCsvTextarea text input must exist');
+    assert.ok(htmlContent.includes('id="btnRunBulkImport"'), 'btnRunBulkImport submit button must exist');
   });
 
   await t.test('2. CSS Stylesheet Rules for Bulk Import', () => {
     const cssPath = path.join(rootDir, 'public', 'css', 'dashboard.css');
     const cssContent = fs.readFileSync(cssPath, 'utf8');
 
-    assert.ok(cssContent.includes('.bulk-upload-dropzone'), '.bulk-upload-dropzone rule must exist');
-    assert.ok(cssContent.includes('.bulk-preview-wrapper'), '.bulk-preview-wrapper rule must exist');
-    assert.ok(cssContent.includes('.bulk-preview-table'), '.bulk-preview-table rule must exist');
-    assert.ok(cssContent.includes('.row-status-pill'), '.row-status-pill rule must exist');
+    assert.ok(cssContent.includes('.bulk-preview-wrapper') || cssContent.includes('.modal-backdrop'), 'Modal styling rules must exist');
   });
 
   await t.test('3. JavaScript CSV Parsing & Phone Normalization Logic', () => {
     const jsPath = path.join(rootDir, 'public', 'js', 'app.js');
     const jsContent = fs.readFileSync(jsPath, 'utf8');
 
-    assert.ok(jsContent.includes('function parseCsvOrTextContent'), 'parseCsvOrTextContent must be defined');
     assert.ok(jsContent.includes('function openBulkImportModal'), 'openBulkImportModal must be defined');
-    assert.ok(jsContent.includes('function renderBulkImportPreview'), 'renderBulkImportPreview must be defined');
-    assert.ok(jsContent.includes('function executeBulkImport'), 'executeBulkImport must be defined');
+    assert.ok(jsContent.includes('function closeBulkImportModal'), 'closeBulkImportModal must be defined');
+    assert.ok(jsContent.includes('function handleBulkImport'), 'handleBulkImport must be defined');
 
     // Test parser logic directly matching app.js
-    function mockParse(content, hasHeader = true) {
+    function mockParse(content) {
       if (!content || !content.trim()) return [];
       const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const rows = [];
-      const startIndex = hasHeader ? 1 : 0;
 
-      for (let i = startIndex; i < lines.length; i++) {
+      for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const delimiter = ",";
         const parts = line.split(delimiter).map(p => p.trim().replace(/^["']|["']$/g, ''));
         if (parts.length === 0 || (parts.length === 1 && !parts[0])) continue;
 
-        // Strict column mapping: column 1 = name, column 2 = phone
-        const contactPerson = parts[0] || "";
+        // Column mapping: column 1 = name, column 2 = phone, column 3 = email
+        const name = parts[0] || "";
         const rawPhone = parts[1] || "";
-        const category = parts[2] || "";
-        const amount = parts[3] || "";
+        const email = parts[2] || "";
 
         const digits = rawPhone.replace(/\D/g, "");
         const isValidPhone = digits.length === 10 || (digits.length === 12 && digits.startsWith("91"));
 
         rows.push({
-          contactPerson: contactPerson || `Client ${digits.slice(-4) || i + 1}`,
+          name: name || `Contact ${digits.slice(-4) || i + 1}`,
           rawPhone,
           digits,
-          category: category || "Direct Intake",
-          amountRequired: amount,
+          email,
           isValid: isValidPhone
         });
       }
       return rows;
     }
 
-    const testCsv = `Name,Phone,Category,Amount
-John Doe,9876543210,Direct Intake,500000
-Priya Patel,+91 98765 43210,ITR Filing,250000
-Invalid Client,12345,GST Registration,`;
+    const testCsv = `John Doe,9876543210,john@example.com
+Priya Patel,+91 98765 43210,priya@example.com
+Invalid Contact,12345,invalid@example.com`;
 
-    // 1. With header (default)
-    const parsedWithHeader = mockParse(testCsv, true);
-    assert.equal(parsedWithHeader.length, 3);
-    assert.equal(parsedWithHeader[0].contactPerson, "John Doe");
-    assert.equal(parsedWithHeader[0].digits, "9876543210");
-    assert.equal(parsedWithHeader[0].isValid, true);
-    assert.equal(parsedWithHeader[1].contactPerson, "Priya Patel");
-    assert.equal(parsedWithHeader[1].isValid, true);
-    assert.equal(parsedWithHeader[2].isValid, false, "12345 is an invalid phone");
+    const parsed = mockParse(testCsv);
+    assert.equal(parsed.length, 3);
+    assert.equal(parsed[0].name, "John Doe");
+    assert.equal(parsed[0].digits, "9876543210");
+    assert.equal(parsed[0].isValid, true);
+    assert.equal(parsed[1].name, "Priya Patel");
+    assert.equal(parsed[1].isValid, true);
+    assert.equal(parsed[2].isValid, false, "12345 is an invalid phone");
 
-    // 2. Without header option
-    const testNoHeader = `John Doe,9876543210,Direct Intake,500000
-Priya Patel,9876543210,ITR Filing,250000`;
-    const parsedNoHeader = mockParse(testNoHeader, false);
-    assert.equal(parsedNoHeader.length, 2);
-    assert.equal(parsedNoHeader[0].contactPerson, "John Doe");
-    assert.equal(parsedNoHeader[1].contactPerson, "Priya Patel");
+    // Test 5-column parsing with Channel and Template
+    assert.ok(jsContent.includes('function parseCsvContacts'), 'parseCsvContacts must be defined in app.js');
+    assert.ok(jsContent.includes('Channel, Template') || jsContent.includes('channel') && jsContent.includes('template'), 'Channel and template must be handled');
 
-    // 3. Strict column order verification (first column is ALWAYS taken as name)
-    const testStrictCols = `9876543210,Some Notes Or Wrong Phone`;
-    const parsedStrict = mockParse(testStrictCols, false);
-    assert.equal(parsedStrict[0].contactPerson, "9876543210", "First column must strictly be taken as name without swapping");
-    assert.equal(parsedStrict[0].rawPhone, "Some Notes Or Wrong Phone", "Second column must strictly be taken as phone");
-    assert.equal(parsedStrict[0].isValid, false);
+    // Extract and test parseCsvContacts logic directly
+    function testParseCsv(content) {
+      const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length === 0) return [];
+      let startIndex = 0;
+      let headerMap = null;
+      const firstParts = lines[0].split(",").map(p => p.trim().replace(/^["']|["']$/g, "").toLowerCase());
+      const hasHeader = firstParts.some(p => 
+        p.includes("name") || p.includes("phone") || p.includes("mobile") || p.includes("email") || p.includes("channel") || p.includes("template")
+      );
+      if (hasHeader) {
+        startIndex = 1;
+        headerMap = {};
+        firstParts.forEach((col, idx) => {
+          if (col.includes("name") || col.includes("target")) headerMap.name = idx;
+          else if (col.includes("phone") || col.includes("mobile")) headerMap.phone = idx;
+          else if (col.includes("email")) headerMap.email = idx;
+          else if (col.includes("channel")) headerMap.channel = idx;
+          else if (col.includes("template") || col.includes("message")) headerMap.template = idx;
+        });
+      }
+      const results = [];
+      for (let i = startIndex; i < lines.length; i++) {
+        const parts = lines[i].split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
+        let name = "";
+        let phone = "";
+        let email = null;
+        let channel = "whatsapp";
+        let template = null;
+        if (headerMap) {
+          name = headerMap.name !== undefined ? parts[headerMap.name] || "" : parts[0] || "";
+          phone = headerMap.phone !== undefined ? parts[headerMap.phone] || "" : parts[1] || "";
+          email = headerMap.email !== undefined && parts[headerMap.email] ? parts[headerMap.email] : null;
+          if (headerMap.channel !== undefined && parts[headerMap.channel]) {
+            channel = parts[headerMap.channel].toLowerCase() === "email" ? "email" : "whatsapp";
+          }
+          if (headerMap.template !== undefined && parts[headerMap.template]) {
+            const tplVal = parts[headerMap.template].trim();
+            template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
+          }
+        } else {
+          name = parts[0] || "";
+          phone = parts[1] || "";
+          email = parts[2] || null;
+          if (parts[3]) channel = parts[3].toLowerCase() === "email" ? "email" : "whatsapp";
+          if (parts[4]) {
+            const tplVal = parts[4].trim();
+            template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
+          }
+        }
+        if (name && phone) results.push({ name, phone, email, channel, template });
+      }
+      return results;
+    }
+
+    const csvWithHeaders = `Name,Mobile Number,Email,Channel,Template
+Rahul Sharma,9876543210,rahul@example.com,whatsapp,new_convo_1
+Priya Patel,9812345678,priya@domain.com,email,none
+Amit Kumar,9899999999,,whatsapp,`;
+
+    const parsedWithHeaders = testParseCsv(csvWithHeaders);
+    assert.equal(parsedWithHeaders.length, 3);
+    assert.equal(parsedWithHeaders[0].name, "Rahul Sharma");
+    assert.equal(parsedWithHeaders[0].template, "new_convo_1", "Outreach template must be preserved");
+    assert.equal(parsedWithHeaders[0].channel, "whatsapp");
+
+    assert.equal(parsedWithHeaders[1].name, "Priya Patel");
+    assert.equal(parsedWithHeaders[1].template, null, "Template 'none' must result in null (no message)");
+    assert.equal(parsedWithHeaders[1].channel, "email");
+
+    assert.equal(parsedWithHeaders[2].name, "Amit Kumar");
+    assert.equal(parsedWithHeaders[2].template, null, "Empty template must result in null (no message)");
+    assert.equal(parsedWithHeaders[2].email, null);
   });
 
   await t.test('4. Backend API Route & Handler in cases.js & index.js', () => {

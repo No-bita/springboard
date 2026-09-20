@@ -98,25 +98,32 @@ function createInMemoryDb() {
       }
 
       // SELECT occurrence joined with schedule
-      if (normSql.includes("FROM scheduled_occurrences o JOIN schedules s ON o.schedule_id = s.id WHERE o.id = ?")) {
+      if (normSql.includes("FROM scheduled_occurrences o") && normSql.includes("JOIN schedules s ON o.schedule_id = s.id")) {
         const id = args[0];
         const occ = tables.scheduled_occurrences.find(o => o.id === id);
         if (!occ) return { rows: [] };
         const sch = tables.schedules.find(s => s.id === occ.schedule_id);
         if (!sch) return { rows: [] };
+        const user = tables.users.find(u => u.id === sch.user_id) || tables.users[0];
         return {
           rows: [{
             ...occ,
             user_id: sch.user_id,
             case_id: sch.case_id,
-            contact_id: sch.contact_id,
-            phone_number: sch.phone_number,
-            template_name: sch.template_name,
-            template_params: sch.template_params,
+            contact_id: sch.contact_id || sch.case_id,
+            recipient_phone: sch.phone_number || "9876543210",
+            recipient_email: null,
+            phone_number: sch.phone_number || "9876543210",
+            template_id: sch.template_name || "new_convo_1",
+            template_name: sch.template_name || "new_convo_1",
+            template_params: sch.template_params || [],
             schedule_type: sch.schedule_type,
             recurrence_interval: sch.recurrence_interval,
             timezone: sch.timezone,
-            schedule_status: sch.status
+            schedule_status: sch.status,
+            contact_name: "Test Contact",
+            contact_phone: sch.phone_number || "9876543210",
+            contact_email: null
           }]
         };
       }

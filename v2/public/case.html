@@ -1,719 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Client Detail — Collectrr</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/css/dashboard.css" />
-    <style>
-      body { background-color: #F8F7F4; display: flex; min-height: 100vh; margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 15px; color: #171717; }
-      
-      /* Sidebar Layout */
-      .app-layout { display: flex; width: 100%; min-height: 100vh; }
-      .sidebar {
-        width: 240px; background: #F4F3EF; border-right: 1px solid #ECE8DF;
-        padding: 1.5rem 1rem; display: flex; flex-direction: column; justify-content: space-between;
-        flex-shrink: 0;
-      }
-      .sidebar .sidebar-brand { display: flex; align-items: center; gap: 0.625rem; padding-bottom: 1.5rem; border-bottom: 1px solid #ECE8DF; }
-      .brand-icon { width: 32px; height: 32px; background: #171717; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 1.1rem; }
-      .brand-text h2 { font-size: 1.125rem; font-weight: 600; color: #171717; margin: 0; }
-      .brand-text p { font-size: 13px; color: #6E6A62; margin: 0; }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Target Workspace — Collectrr</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    body { background-color: #F8F7F4; margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 15px; color: #171717; }
+    .main-content { max-width: 1440px; margin: 0 auto; padding: 32px 40px; }
+    .banner-card { background: #ffffff; border: 1px solid #ECE8DF; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+    .workspace-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 24px; }
+    @media (max-width: 960px) { .workspace-grid { grid-template-columns: 1fr; } }
+    
+    .panel-card { background: #ffffff; border: 1px solid #ECE8DF; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; }
+    .panel-title { font-size: 17px; font-weight: 600; margin: 0 0 16px 0; color: #171717; display: flex; justify-content: space-between; align-items: center; }
 
-      .sidebar-menu { display: flex; flex-direction: column; gap: 0.375rem; margin-top: 1.5rem; }
-      .menu-item {
-        display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.875rem;
-        font-size: 15px; font-weight: 500; color: #6E6A62; text-decoration: none;
-        border-radius: 8px; transition: all 150ms ease-out;
-      }
-      .menu-item:hover { background: #ECE8DF; color: #171717; }
-      .menu-item.active { background: #ECE8DF; color: #171717; font-weight: 600; }
+    /* Conversation Stream */
+    .chat-container { display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto; padding: 12px 4px; }
+    .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; position: relative; }
+    .chat-bubble.outbound { align-self: flex-end; background: #171717; color: #ffffff; border-bottom-right-radius: 2px; }
+    .chat-bubble.inbound { align-self: flex-start; background: #F4F3EF; color: #171717; border-bottom-left-radius: 2px; }
+    .chat-meta { font-size: 11px; margin-top: 4px; opacity: 0.7; display: flex; justify-content: flex-end; gap: 4px; }
 
-      .sidebar-user { display: flex; align-items: center; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid #ECE8DF; }
-      .user-avatar { width: 36px; height: 36px; background: #171717; border-radius: 999px; color: #fff; font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: center; }
-      .user-info div:first-child { font-size: 13px; font-weight: 600; color: #171717; }
-      .user-info div:last-child { font-size: 13px; color: #6E6A62; }
+    /* Requests Checklist */
+    .request-card { background: #FAF9F6; border: 1px solid #ECE8DF; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 6px; }
+    .checklist-item.done { text-decoration: line-through; opacity: 0.6; }
 
-      /* Main Screen Area */
-      .main-content { flex: 1; padding: 32px 40px; overflow-y: auto; max-width: 1440px; margin: 0 auto; }
-      
-      .top-nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-      .back-link { display: inline-flex; align-items: center; gap: 0.5rem; color: #6E6A62; font-size: 15px; font-weight: 500; text-decoration: none; }
-      .back-link:hover { color: #171717; }
+    /* Activity Stream */
+    .timeline-item { display: flex; gap: 12px; font-size: 13px; margin-bottom: 14px; }
+    .timeline-dot { width: 10px; height: 10px; border-radius: 999px; background: #2563EB; margin-top: 4px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="main-content">
+    <!-- Top Navigation -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <a href="/dashboard.html" style="text-decoration: none; color: #6E6A62; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;">
+        ← Back to Dashboard
+      </a>
+      <!-- Billing / Credits concept commented out
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span id="creditDisplayBadge" style="font-size: 13px; font-weight: 600; padding: 4px 10px; background: #FEF3C7; color: #92400E; border-radius: 999px;">⚡ Credits</span>
+      </div>
+      -->
+    </div>
 
-      /* Client Banner Card */
-      .client-banner-card {
-        background: #ffffff; border: 1px solid #ECE8DF; border-radius: 12px;
-        padding: 24px; box-shadow: none; margin-bottom: 24px;
-      }
-      .banner-header { display: flex; align-items: center; gap: 1.25rem; margin-bottom: 1.5rem; }
-      .client-banner-card.is-direct-outreach .banner-header { margin-bottom: 0; }
-      .avatar-circle {
-        width: 56px; height: 56px; background: #F4F3EF; color: #171717;
-        font-weight: 600; font-size: 1.25rem; border-radius: 999px;
-        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        border: 1px solid #ECE8DF;
-      }
-      .client-meta h2 { font-size: 28px; font-weight: 600; color: #171717; display: flex; align-items: center; gap: 0.75rem; margin: 0; }
-      .client-sub { font-size: 15px; color: #6E6A62; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
-      
-      .status-badge-prominent {
-        font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0;
-        padding: 6px 12px;
-        border-radius: 8px;
-        box-shadow: none;
-        flex-shrink: 0;
-      }
-      
-      .banner-stats-grid {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
-        padding-top: 1.25rem; border-top: 1px solid #ECE8DF;
-      }
-      @media (max-width: 1024px) { .banner-stats-grid { grid-template-columns: repeat(1, 1fr); } }
-      
-      .stat-col { display: flex; flex-direction: column; gap: 0.25rem; border-right: 1px solid #ECE8DF; padding-right: 1rem; }
-      .stat-col:last-child { border-right: none; }
-      .stat-col-label { font-size: 13px; font-weight: 500; color: #6E6A62; }
-      .stat-col-val { font-size: 18px; font-weight: 600; color: #171717; display: flex; align-items: center; gap: 0.5rem; }
-
-      /* Progress Bar Segment */
-      .seg-progress-bar { display: flex; gap: 4px; width: 120px; height: 6px; }
-      .seg-bar { flex: 1; background: #ECE8DF; border-radius: 999px; }
-      .seg-bar.filled { background: #1C8C5E; }
-
-      /* Main 2-Column Grid */
-      .case-content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
-      @media (max-width: 960px) { .case-content-grid { grid-template-columns: 1fr; } }
-
-      .card-panel { background: #ffffff; border: 1px solid #ECE8DF; border-radius: 12px; padding: 24px; box-shadow: none; }
-      .card-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-      .card-panel-title { font-size: 18px; font-weight: 600; color: #171717; }
-
-      /* Required Documents Table Layout */
-      .docs-panel-header {
-        display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
-      }
-      .docs-panel-header .panel-title-group { display: flex; align-items: center; gap: 0.75rem; }
-      .docs-panel-header .panel-title-group .panel-icon {
-        width: 36px; height: 36px; background: #eff6ff; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
-      }
-      .docs-panel-header .panel-title-group h3 { margin: 0; font-size: 1.125rem; font-weight: 700; color: #0f172a; }
-      .docs-received-badge {
-        display: inline-flex; align-items: center; gap: 0.35rem;
-        background: #ecfdf5; color: #059669; font-weight: 600; font-size: 0.75rem;
-        padding: 0.2rem 0.6rem; border-radius: 999px;
-      }
-      .docs-received-badge.partial { background: #fef3c7; color: #b45309; }
-      .docs-panel-subtitle { font-size: 0.8125rem; color: #64748b; margin-top: 0.25rem; }
-
-      .view-all-files-btn {
-        display: inline-flex; align-items: center; gap: 0.35rem;
-        background: #ffffff; border: 1px solid #2563eb; color: #2563eb;
-        font-weight: 600; font-size: 0.8125rem; padding: 0.5rem 1rem;
-        border-radius: 8px; cursor: pointer; transition: all 0.15s ease;
-      }
-      .view-all-files-btn:hover { background: #eff6ff; }
-
-      .docs-table-header {
-        display: grid; grid-template-columns: 1fr 200px 160px;
-        padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600;
-        color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;
-        border-bottom: 1px solid #f1f5f9;
-      }
-
-      .doc-row {
-        display: grid; grid-template-columns: 1fr 200px 160px;
-        padding: 1rem; align-items: center;
-        border: 1px solid #e2e8f0; border-radius: 10px;
-        margin-top: 0.5rem; background: #ffffff;
-        transition: border-color 0.15s, box-shadow 0.15s;
-      }
-      .doc-row:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-
-      .doc-row-info { display: flex; align-items: center; gap: 0.875rem; }
-      .doc-type-icon {
-        width: 40px; height: 40px; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.15rem; flex-shrink: 0;
-      }
-      .doc-type-icon.pan { background: #dbeafe; color: #2563eb; }
-      .doc-type-icon.aadhaar { background: #e0e7ff; color: #4f46e5; }
-      .doc-type-icon.bank { background: #fef3c7; color: #b45309; }
-      .doc-type-icon.gst { background: #dcfce7; color: #15803d; }
-      .doc-type-icon.default { background: #f1f5f9; color: #475569; }
-
-      .doc-row-name { font-size: 0.9375rem; font-weight: 600; color: #0f172a; }
-      .doc-row-sub { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
-
-      .doc-row-status { display: flex; flex-direction: column; gap: 0.15rem; }
-      .status-received { display: inline-flex; align-items: center; gap: 0.3rem; color: #059669; font-weight: 600; font-size: 0.8125rem; }
-      .status-pending { display: inline-flex; align-items: center; gap: 0.3rem; color: #b45309; font-weight: 600; font-size: 0.8125rem; }
-      .doc-row-timestamp { font-size: 0.6875rem; color: #94a3b8; }
-
-      .doc-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
-      .view-file-btn {
-        display: inline-flex; align-items: center; gap: 0.35rem;
-        background: #ffffff; border: 1px solid #e2e8f0; color: #2563eb;
-        font-weight: 600; font-size: 0.8125rem; padding: 0.4rem 0.875rem;
-        border-radius: 8px; cursor: pointer; text-decoration: none;
-        transition: all 0.15s ease;
-      }
-      .view-file-btn:hover { background: #eff6ff; border-color: #2563eb; }
-
-
-      .add-doc-row {
-        display: flex; align-items: center; gap: 0.75rem;
-        padding: 1rem; margin-top: 0.5rem;
-        border: 1px dashed #cbd5e1; border-radius: 10px;
-        cursor: pointer; transition: all 0.15s ease;
-      }
-      .add-doc-row:hover { border-color: #2563eb; background: #f8fafc; }
-      .add-doc-icon {
-        width: 40px; height: 40px; background: #eff6ff; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.25rem; color: #2563eb;
-      }
-      .add-doc-text div:first-child { font-size: 0.875rem; font-weight: 600; color: #2563eb; }
-      .add-doc-text div:last-child { font-size: 0.75rem; color: #94a3b8; }
-
-      /* Timeline Stream */
-      .timeline-feed { display: flex; flex-direction: column; gap: 1rem; max-height: 380px; overflow-y: auto; padding-right: 0.5rem; }
-      .timeline-feed-item { display: flex; gap: 0.75rem; align-items: flex-start; }
-      .timeline-icon-dot {
-        width: 32px; height: 32px; border-radius: 999px; background: #e0f2fe; color: #0284c7;
-        display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; flex-shrink: 0;
-      }
-      .timeline-content { flex: 1; }
-      .timeline-meta { font-size: 13px; color: #6E6A62; margin-top: 0.15rem; transition: opacity 150ms ease-out, visibility 150ms ease-out; }
-      .timeline-meta.hover-only { opacity: 0; visibility: hidden; }
-      .timeline-feed-item:hover .timeline-meta.hover-only,
-      .timeline-content:hover .timeline-meta.hover-only { opacity: 1; visibility: visible; }
-
-      /* Bottom Quick Actions Grid */
-      .case-actions-card {
-        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem;
-      }
-      .actions-title { font-size: 1rem; font-weight: 700; color: #0f172a; margin-bottom: 1rem; }
-      .actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-      @media (max-width: 900px) { .actions-grid { grid-template-columns: repeat(2, 1fr); } }
-
-      .action-pill-btn {
-        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem;
-        display: flex; align-items: center; gap: 0.875rem; cursor: pointer; transition: all 0.15s ease; text-align: left;
-      }
-      .action-pill-btn:hover { border-color: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.04); }
-      .action-icon {
-        width: 36px; height: 36px; border-radius: 8px; background: #eff6ff; color: #2563eb;
-        display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;
-      }
-      /* Modal Overlay & Container System */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(23, 23, 23, 0.4);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        padding: 1.5rem;
-      }
-      .modal-overlay[hidden] {
-        display: none !important;
-      }
-      .modal-container {
-        background: #ffffff;
-        border: 1px solid #ECE8DF;
-        border-radius: 16px;
-        width: 100%;
-        max-width: 520px;
-        padding: 24px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-        max-height: 90vh;
-        overflow-y: auto;
-      }
-      .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.25rem;
-      }
-      .modal-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #171717;
-        margin: 0;
-      }
-      .close-btn {
-        background: transparent !important;
-        border: none !important;
-        font-size: 20px !important;
-        color: #6E6A62 !important;
-        cursor: pointer !important;
-        padding: 4px !important;
-        line-height: 1 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 6px !important;
-        box-shadow: none !important;
-        outline: none !important;
-        transition: color 150ms ease-out !important;
-      }
-      .close-btn:hover {
-        color: #171717 !important;
-        background: transparent !important;
-      }
-
-      @media (max-width: 600px) {
-        .main-content {
-          padding: 16px 12px !important;
-          max-width: 100% !important;
-          box-sizing: border-box !important;
-        }
-        .top-nav-bar {
-          padding: 12px 14px !important;
-          margin-bottom: 16px !important;
-        }
-        #topUserContainer .user-info {
-          display: none !important;
-        }
-        .client-banner-card {
-          padding: 16px !important;
-          margin-bottom: 16px !important;
-        }
-        .banner-header {
-          gap: 0.875rem !important;
-          margin-bottom: 1rem !important;
-          flex-wrap: wrap !important;
-        }
-        .avatar-circle {
-          width: 44px !important;
-          height: 44px !important;
-          font-size: 1rem !important;
-        }
-        .client-meta h2 {
-          font-size: 20px !important;
-        }
-        .card-panel {
-          padding: 16px !important;
-          min-width: 0 !important;
-          max-width: 100% !important;
-          box-sizing: border-box !important;
-        }
-        .case-content-grid {
-          grid-template-columns: minmax(0, 1fr) !important;
-          gap: 16px !important;
-        }
-        .actions-grid {
-          grid-template-columns: 1fr !important;
-          gap: 10px !important;
-        }
-        .ocr-tag {
-          white-space: normal !important;
-          word-break: break-word !important;
-          line-height: 1.3 !important;
-          max-width: 100% !important;
-          box-sizing: border-box !important;
-        }
-
-        /* Issue 3: Mobile Case Detail Document Rows */
-        .docs-table-header {
-          display: none !important;
-        }
-
-        .doc-row {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: stretch !important;
-          gap: 12px !important;
-          padding: 14px !important;
-          border-radius: 10px !important;
-          box-sizing: border-box !important;
-          width: 100% !important;
-          min-width: 0 !important;
-          max-width: 100% !important;
-        }
-
-        .doc-row-info {
-          width: 100% !important;
-          min-width: 0 !important;
-          box-sizing: border-box !important;
-        }
-
-        .doc-row-name {
-          font-size: 15px !important;
-          font-weight: 600 !important;
-          color: #171717 !important;
-          word-break: break-word !important;
-          line-height: 1.3 !important;
-        }
-
-        .doc-row-status {
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-          width: 100% !important;
-          padding-top: 6px !important;
-          border-top: 1px solid #F4F3EF !important;
-          box-sizing: border-box !important;
-        }
-
-        .doc-row-actions {
-          display: flex !important;
-          flex-wrap: wrap !important;
-          gap: 8px !important;
-          justify-content: stretch !important;
-          width: 100% !important;
-          margin-top: 4px !important;
-          box-sizing: border-box !important;
-        }
-
-        .doc-row-actions .view-file-btn {
-          flex: 1 1 calc(50% - 4px) !important;
-          min-height: 40px !important;
-          font-size: 13px !important;
-          font-weight: 500 !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          text-align: center !important;
-          box-sizing: border-box !important;
-          padding: 8px 8px !important;
-        }
-
-        .doc-row-actions .btn {
-          flex: 1 1 100% !important;
-          min-height: 40px !important;
-          font-size: 13px !important;
-          font-weight: 500 !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          text-align: center !important;
-          box-sizing: border-box !important;
-          padding: 8px 10px !important;
-          width: 100% !important;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="app-layout">
-      <!-- Collapsible Sidebar (Hidden until additional tabs are added) -->
-      <aside class="sidebar" id="appSidebar" style="display: none !important;">
-        <div>
-          <div class="sidebar-header">
-            <div class="sidebar-brand">
-              <div class="brand-icon">C</div>
-              <div class="brand-text">
-                <h2>Collectrr</h2>
-              </div>
+    <!-- Contact Banner -->
+    <div class="banner-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div id="contactAvatar" style="width: 52px; height: 52px; border-radius: 999px; background: #171717; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600;">--</div>
+          <div>
+            <h1 id="clientName" style="font-size: 22px; font-weight: 700; margin: 0; color: #171717;">Loading Target...</h1>
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px; font-size: 14px; color: #6E6A62;">
+              <span id="clientPhone">—</span>
+              <span id="clientEmail"></span>
             </div>
-            <button type="button" class="sidebar-toggle-btn" id="sidebarToggle" title="Toggle Sidebar">◀</button>
-          </div>
-
-          <nav class="sidebar-menu">
-            <a href="/dashboard.html" class="menu-item">
-              <span class="menu-label">Dashboard</span>
-            </a>
-            <a href="/admin/analytics" class="menu-item" id="navAnalytics" style="display: none;">
-              <span class="menu-label">Analytics</span>
-            </a>
-            <a href="/dd" class="menu-item" id="navObservability" style="display: none;">
-              <span class="menu-label">Observability</span>
-            </a>
-          </nav>
-        </div>
-
-        <div class="sidebar-user">
-          <div class="user-avatar" id="sidebarUserAvatar">--</div>
-          <div class="user-info">
-            <div id="sidebarUserName">User</div>
-            <div id="sidebarUserRole">Agent</div>
           </div>
         </div>
-      </aside>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="clientStatusBadge" style="padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; background: #F4F3EF; color: #171717;">Active</span>
+        </div>
+      </div>
+    </div>
 
-      <!-- Main Content Screen -->
-      <main class="main-content" style="width: 100%;">
+    <!-- 2-Column Workspace Grid -->
+    <div class="workspace-grid">
+      
+      <!-- Left Column: Unified 2-Way Chat Stream & Composer -->
+      <div class="panel-card" style="min-height: 580px;">
+        <div class="panel-title">
+          <span>Conversation</span>
+          <span id="windowStatusText" style="font-size: 12px; font-weight: 500; color: #6E6A62;">WhatsApp</span>
+        </div>
+
+        <div id="customerWindowBanner" style="display: none; padding: 10px 14px; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 8px; font-size: 13px; color: #92400E; margin-bottom: 12px;">
+          24-hour freeform messaging window is closed. Send a pre-approved template below.
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+          <div style="text-align: center; color: #9CA3AF; padding: 2rem;">Loading messages...</div>
+        </div>
+
+        <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid #ECE8DF;">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <select id="channelSelect" onchange="onChannelChange()" style="padding: 8px 12px; border: 1px solid #ECE8DF; border-radius: 8px; font-size: 13px; background: #ffffff; font-weight: 500; cursor: pointer;">
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+            </select>
+            <div id="templateSelectorContainer" style="flex: 1;">
+              <select id="templateSelect" onchange="onTemplateSelectChange()" style="width: 100%; padding: 8px 12px; border: 1px solid #ECE8DF; border-radius: 8px; font-size: 13px; background: #ffffff;">
+                <option value="new_convo_1" selected>New Outreach Template (new_convo_1)</option>
+                <option value="hello_world">Meta Hello World (hello_world)</option>
+                <option value="freeform" id="optFreeform" disabled>Direct Freeform Message (Disabled until target replies)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="composerInput" placeholder="Template message will be sent..." style="flex: 1; padding: 10px 14px; border: 1px solid #ECE8DF; border-radius: 8px; font-size: 14px; outline: none;" />
+            <button type="button" id="btnSendMessage" onclick="sendMessage()" style="padding: 10px 18px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Requests & Activity Log -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
         
-      <!-- Top Navigation Bar -->
-      <nav class="top-nav-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.5rem; background: #ffffff; border-bottom: 1px solid #e2e8f0; margin-bottom: 1.25rem; border-radius: 12px;">
-        <a href="/" class="top-nav-brand" style="display: flex; align-items: center; gap: 0.625rem; text-decoration: none; cursor: pointer; padding: 0; border: none;">
-          <div class="brand-icon">C</div>
-          <div class="brand-text">
-            <h2 style="font-size: 1.15rem; font-weight: 600; color: #171717; margin: 0;">Collectrr</h2>
+        <!-- Active Requests Panel (Commented out)
+        <div class="panel-card">
+          <div class="panel-title">
+            <span>Requests & Tasks</span>
+            <button type="button" onclick="openAddRequestModal()" style="font-size: 13px; font-weight: 500; background: #F4F3EF; border: 1px solid #ECE8DF; padding: 4px 10px; border-radius: 6px; cursor: pointer;">+ Add Request</button>
           </div>
-        </a>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <a href="/admin/analytics" id="navAnalytics" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.875rem; color: #475569; text-decoration: none;">Analytics</a>
-          <a href="/dd" id="navObservability" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.875rem; color: #475569; text-decoration: none;">Observability</a>
-          <div class="sidebar-user" id="topUserContainer" style="display: flex; align-items: center; gap: 0.625rem; padding: 0.35rem 0.875rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; cursor: pointer;" title="Click to log out">
-            <div class="user-avatar" id="userAvatar" style="width: 30px; height: 30px; font-size: 0.8125rem;">--</div>
-            <div class="user-info" style="line-height: 1.2;">
-              <div id="userName" style="font-size: 0.8125rem; font-weight: 600; color: #0f172a;">User</div>
-              <div id="userRole" style="font-size: 0.6875rem; color: #64748b;">Agent</div>
-            </div>
+          <div id="requestsList">
+            <div style="color: #6E6A62; font-size: 13px; text-align: center; padding: 1rem;">No active requests.</div>
           </div>
         </div>
-      </nav>
+        -->
 
-
-        <!-- Action Row -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-          <a href="/dashboard.html" class="back-link" data-variant-key="lblBackToCases">← Back</a>
-        </div>
-
-
-
-        <div id="caseError" style="background: #fee2e2; border: 1px solid #f87171; color: #b91c1c; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem;" hidden></div>
-
-        <!-- Client Header Banner Card -->
-        <section class="client-banner-card" id="bannerCard">
-          <div class="banner-header">
-            <div class="avatar-circle" id="clientInitials">--</div>
-            <div class="client-meta" style="flex: 1;">
-              <h2>
-                <span id="clientName">Loading Case...</span>
-              </h2>
-              <div class="client-sub">
-                <span id="clientPhone">--</span>
-              </div>
-            </div>
-            <span class="badge status-badge-prominent" id="clientStatusBadge">--</span>
-            <div class="stat-col" id="directOutreachTemplateCol" style="display: none; border: none; padding: 0; text-align: right; align-items: flex-end; justify-content: center;">
-              <div class="stat-col-label" style="font-size: 13px; font-weight: 500; color: #6E6A62;">Template</div>
-              <div class="stat-col-val" id="directOutreachTemplateVal" style="font-size: 18px; font-weight: 600; color: #171717;">—</div>
-            </div>
+        <!-- Activity Feed -->
+        <div class="panel-card">
+          <div class="panel-title">
+            <span>Activity & Notes</span>
           </div>
 
-          <div class="banner-stats-grid" id="bannerStatsGrid">
-            <div class="stat-col">
-              <div class="stat-col-label" data-variant-key="lblLoanType">Filing</div>
-              <div class="stat-col-val" id="statProduct">—</div>
-            </div>
-            <div class="stat-col">
-              <div class="stat-col-label" data-variant-key="lblDocProgress">Collection Progress</div>
-              <div class="stat-col-val">
-                <div class="seg-progress-bar" id="segProgressBar">
-                  <div class="seg-bar"></div>
-                  <div class="seg-bar"></div>
-                  <div class="seg-bar"></div>
-                  <div class="seg-bar"></div>
-                </div>
-                <span id="statDocCount">0 / 0</span>
-              </div>
-            </div>
-            <div class="stat-col">
-              <div class="stat-col-label" data-variant-key="lblUploadLink">Collection Link</div>
-              <div class="stat-col-val">
-                <a href="javascript:void(0)" id="copyLinkBtn" style="color: #2563eb; text-decoration: underline; font-size: 0.9375rem; font-weight: 600; cursor: pointer;">Copy Link</a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Main Content 2-Column Grid -->
-        <div class="case-content-grid">
-          <!-- Left Column: Required Documents -->
-          <div class="card-panel" id="docsCardPanel">
-            <div class="docs-panel-header">
-              <div>
-                <div class="panel-title-group">
-                  <h3>Required Documents</h3>
-                </div>
-              </div>
-            </div>
-
-            <div class="docs-table-header">
-              <div>Document</div>
-              <div>Status</div>
-              <div style="text-align: right;">Actions</div>
-            </div>
-
-            <div id="reqDocsContainer">
-              <p style="color: #64748b; font-size: 0.875rem; padding: 1rem;">Loading...</p>
-            </div>
-
-            <div class="add-doc-row" id="addDocRequirementBtn" style="display: flex; align-items: center; gap: 0.75rem; padding: 12px 16px; background: #FCFBF8; border: 1px dashed #ECE8DF; border-radius: 10px; cursor: pointer; transition: all 150ms ease-out; margin-top: 1rem;">
-              <div class="add-doc-icon" style="width: 28px; height: 28px; background: #F4F3EF; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; color: #171717;">+</div>
-              <div class="add-doc-text">
-                <div style="font-size: 14px; font-weight: 600; color: #171717;">Request New Document</div>
-              </div>
-            </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input type="text" id="noteInput" placeholder="Add an internal note..." style="flex: 1; padding: 8px 12px; border: 1px solid #ECE8DF; border-radius: 6px; font-size: 13px;" />
+            <button type="button" onclick="addNote()" style="padding: 8px 14px; background: #F4F3EF; border: 1px solid #ECE8DF; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">Add Note</button>
           </div>
 
-          <!-- Right Column: Activity & Notes -->
-          <div class="card-panel">
-            <div class="card-panel-header" style="display: flex; justify-content: space-between; align-items: center;">
-              <div class="card-panel-title">Activity & Notes</div>
-            </div>
-            <div class="timeline-feed" id="timelineFeed">
-              <p style="color: #64748b; font-size: 0.875rem;">Loading activity...</p>
-            </div>
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-              <input type="text" id="noteInput" placeholder="Type internal note..." style="flex: 1; font-size: 0.875rem; padding: 0.5rem 0.875rem; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;" />
-              <button type="button" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 8px;" id="addNoteBtn">Add Note</button>
-            </div>
+          <div id="activityTimeline" style="max-height: 240px; overflow-y: auto;">
+            <div style="color: #6E6A62; font-size: 13px; text-align: center; padding: 1rem;">Loading activity...</div>
           </div>
         </div>
 
-      </main>
-    </div>
-
-    <!-- Agent Upload Modal -->
-    <div class="modal-overlay" id="agentUploadModalBackdrop" hidden>
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3 class="modal-title">Upload Document</h3>
-          <button type="button" class="close-btn" id="closeAgentUpload">✕</button>
-        </div>
-        <form id="agentUploadForm" style="margin-top: 1.25rem;">
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Document Requirement</label>
-            <select id="agentUploadDocSelect" required style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;">
-            </select>
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Select File</label>
-            <input type="file" id="agentUploadFileInput" required style="width: 100%; font-size: 14px; color: #171717;" />
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">File Title</label>
-            <input type="text" id="agentUploadLabelInput" placeholder="e.g. Bank Statement Q3" style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;" />
-          </div>
-          <div id="agentUploadError" style="color: #D84A3A; background: #FEE2E2; border: 1px solid #ECE8DF; padding: 0.75rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;" hidden></div>
-          <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn" id="cancelAgentUpload">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="submitAgentUpload">Upload Document</button>
-          </div>
-        </form>
       </div>
     </div>
+  </div>
 
-    <!-- Edit Case Modal -->
-    <div class="modal-overlay" id="editCaseModalBackdrop" hidden>
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3 class="modal-title" data-variant-key="lblEditModalTitle">Edit Client</h3>
-          <button type="button" class="close-btn" id="closeEditCase">✕</button>
+  <!-- Add Request Modal -->
+  <div class="modal-backdrop" id="requestModalBackdrop" hidden style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+    <div style="background: #ffffff; border-radius: 16px; width: 100%; max-width: 480px; padding: 24px; position: relative;">
+      <button type="button" onclick="closeAddRequestModal()" style="position: absolute; top: 16px; right: 16px; border: none; background: none; font-size: 18px; cursor: pointer;">✕</button>
+      <h3 style="margin: 0 0 16px 0; font-size: 17px;">Add New Request</h3>
+      
+      <form onsubmit="handleCreateRequest(event)">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px;">Request Title</label>
+          <input type="text" id="reqTitleInput" placeholder="e.g. Monthly GST Documents" required style="width: 100%; padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 6px; box-sizing: border-box;" />
         </div>
-        <form id="editCaseForm" style="margin-top: 1.25rem;">
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;" data-variant-key="lblBorrowerName">Client Name</label>
-            <input id="editContactPerson" required type="text" style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;" />
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Mobile Number</label>
-            <input id="editPhone" required type="tel" maxlength="10" style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;" />
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;" data-variant-key="lblLoanType">Filing</label>
-            <select id="editLoanProductSelect" required style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;">
-            </select>
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem; display: none;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Amount Required (Lacs)</label>
-            <input id="editAmountRequired" type="number" step="any" min="0" style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; color: #171717; outline: none;" />
-          </div>
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Required Documents</label>
-            <div id="editRequiredDocsFields" class="doc-check-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;"></div>
-          </div>
-          <div id="editCaseError" style="color: #D84A3A; background: #FEE2E2; border: 1px solid #ECE8DF; padding: 0.75rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;" hidden></div>
-          <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn" id="cancelEditCase">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="submitEditCase">Save Changes</button>
-          </div>
-        </form>
-      </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px;">Checklist Items (one per line)</label>
+          <textarea id="reqItemsInput" rows="3" placeholder="Form 16&#10;Bank Statement&#10;Invoice Copy" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 6px; box-sizing: border-box;"></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" onclick="closeAddRequestModal()" style="padding: 8px 14px; border: 1px solid #ECE8DF; background: #ffffff; border-radius: 6px; cursor: pointer;">Cancel</button>
+          <button type="submit" style="padding: 8px 16px; background: #171717; color: #ffffff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Save Request</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <!-- Inline Browser PDF/Image Document Preview Drawer -->
-    <div class="doc-preview-backdrop" id="docPreviewBackdrop" hidden>
-      <div class="doc-preview-drawer">
-        <div class="doc-preview-header">
-          <div class="doc-preview-title">
-            <h3 id="previewDocTitle">Document Preview</h3>
-            <p id="previewDocSub">Collectrr Document Viewer</p>
-          </div>
-          <div class="doc-preview-actions">
-            <a href="#" id="previewDownloadBtn" target="_blank" download class="btn" style="font-size: 0.8125rem; font-weight: 600;">
-              ⬇️ Download File
-            </a>
-            <button type="button" id="closeDocPreview" style="background: transparent; border: none; font-size: 1.25rem; cursor: pointer; color: #64748b; padding: 0.25rem;">✕</button>
-          </div>
-        </div>
-        <div class="doc-preview-body" id="previewDocBody">
-          <!-- Dynamic iframe or img embed -->
-        </div>
-      </div>
-    </div>
-
-    <!-- Add Document Requirement Modal -->
-    <div class="modal-overlay" id="addRequirementModalBackdrop" hidden>
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3 class="modal-title">Request New Document</h3>
-          <button type="button" class="close-btn" id="closeAddRequirement">✕</button>
-        </div>
-        <form id="addRequirementForm">
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Document Name / Description</label>
-            <input type="text" id="addRequirementInput" class="input-field" placeholder="e.g. Property Sanction Letter, Partnership Deed..." style="width: 100%; height: 44px; padding: 0 1rem; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 15px; outline: none;" required />
-          </div>
-          <div id="addRequirementError" style="color: #D84A3A; background: #FEE2E2; border: 1px solid #ECE8DF; padding: 0.75rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;" hidden></div>
-          <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn" id="cancelAddRequirement">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="submitAddRequirement">Request Document</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Send WhatsApp Template Modal -->
-    <div class="modal-overlay" id="waTemplateModalBackdrop" hidden>
-      <div class="modal-container" style="max-width: 480px;">
-        <div class="modal-header">
-          <h3 class="modal-title">Send WhatsApp Template</h3>
-          <button type="button" class="close-btn" id="closeWaTemplateModal">✕</button>
-        </div>
-        <form id="waTemplateModalForm" style="margin-top: 1.25rem;">
-          <div class="field" style="margin-bottom: 1.25rem;">
-            <label style="display: block; font-size: 13px; font-weight: 600; color: #171717; margin-bottom: 0.4rem;">Select Approved Template</label>
-            <select id="waTemplateSelect" required style="width: 100%; height: 44px; padding: 0 1rem; background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 10px; font-size: 14px; color: #171717; outline: none;">
-            </select>
-            <div id="waTemplateDescription" style="font-size: 12px; color: #64748B; margin-top: 6px; line-height: 1.4;"></div>
-          </div>
-
-          <div id="waTemplateParamsContainer" style="margin-bottom: 1.25rem;"></div>
-
-          <div id="waTemplateModalError" style="color: #D84A3A; background: #FEE2E2; border: 1px solid #ECE8DF; padding: 0.75rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;" hidden></div>
-
-          <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn" id="cancelWaTemplateModal">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="submitWaTemplateModal">Send Template ➔</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <script src="/js/ui-components.js?v=2.9"></script>
-    <script src="/js/case-detail.js?v=2.9"></script>
-  </body>
+  <script src="/js/case-detail.js?v=4.0"></script>
+</body>
 </html>
-

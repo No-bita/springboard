@@ -29,7 +29,8 @@ export async function initAuth() {
   try {
     const res = await authFetch("/api/user/profile");
     if (res.ok) {
-      const user = await res.json();
+      const data = await res.json();
+      const user = data.user || data;
       setCurrentUser(user);
       renderUserProfile(user);
       return user;
@@ -46,19 +47,37 @@ export async function initAuth() {
 }
 
 export function renderUserProfile(user) {
-  const userNameEl = el("userNameDisplay");
-  const userRoleBadge = el("userRoleBadge");
+  const userData = user?.user || user || {};
+  const userNameEl = el("userNameDisplay") || el("userName");
+  const userRoleBadge = el("userRoleBadge") || el("userRole");
+  const userAvatarEl = el("userAvatar");
+  const topUserContainer = el("topUserContainer");
   const btnTemplate = el("btnOpenTemplateModal");
   const btnDocMapping = el("btnOpenDocMappingModal");
 
+  const username = userData.username || userData.name || "User";
+  const role = userData.role || "admin";
+
   if (userNameEl) {
-    userNameEl.textContent = user.username || user.name || "Agent";
+    userNameEl.textContent = username;
   }
 
-  const isAdmin = user.role === "admin" || user.id === "admin";
+  if (userAvatarEl) {
+    const initials = username
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+    userAvatarEl.textContent = initials || username.slice(0, 2).toUpperCase();
+  }
+
+  const isAdmin = role === "admin" || userData.id === "admin";
   if (userRoleBadge) {
-    userRoleBadge.textContent = isAdmin ? "Administrator" : "Agent";
-    userRoleBadge.className = isAdmin ? "badge-admin" : "badge-agent";
+    userRoleBadge.textContent = isAdmin ? (userRoleBadge.id === "userRole" ? "Admin" : "Administrator") : (role.charAt(0).toUpperCase() + role.slice(1));
+    if (userRoleBadge.classList && userRoleBadge.classList.contains("badge")) {
+      userRoleBadge.className = isAdmin ? "badge-admin" : "badge-agent";
+    }
   }
 
   if (btnTemplate) {

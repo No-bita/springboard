@@ -133,7 +133,8 @@ function createMockEmailDb() {
       return { rows: [], changes: 1 };
     }
     if (norm.startsWith("UPDATE scheduled_occurrences SET operational_status = 'completed'")) {
-      const [providerMsgId, occId] = args;
+      const occId = args[args.length - 1];
+      const providerMsgId = args[0];
       const occ = records.scheduled_occurrences.find(x => x.id === occId);
       if (occ) {
         occ.operational_status = "completed";
@@ -142,7 +143,7 @@ function createMockEmailDb() {
       return { rows: [], changes: 1 };
     }
     if (norm.startsWith("UPDATE scheduled_occurrences SET operational_status = 'skipped'")) {
-      const occId = args[0];
+      const occId = args[args.length - 1];
       const occ = records.scheduled_occurrences.find(x => x.id === occId);
       if (occ) {
         occ.operational_status = "skipped";
@@ -150,7 +151,8 @@ function createMockEmailDb() {
       return { rows: [], changes: 1 };
     }
     if (norm.startsWith("UPDATE scheduled_occurrences SET operational_status = 'failed'")) {
-      const [errMsg, occId] = args;
+      const errMsg = args[0];
+      const occId = args[args.length - 1];
       const occ = records.scheduled_occurrences.find(x => x.id === occId);
       if (occ) {
         occ.operational_status = "failed";
@@ -158,7 +160,7 @@ function createMockEmailDb() {
       }
       return { rows: [], changes: 1 };
     }
-    if (norm.includes("FROM scheduled_occurrences o JOIN schedules s ON o.schedule_id = s.id WHERE o.id = ?")) {
+    if (norm.includes("FROM scheduled_occurrences o") && norm.includes("JOIN schedules s ON o.schedule_id = s.id") && norm.includes("WHERE o.id = ?")) {
       const occId = args[0];
       const occ = records.scheduled_occurrences.find(x => x.id === occId);
       if (!occ) return { rows: [] };
@@ -228,14 +230,19 @@ function createMockEmailDb() {
       return { rows: [] };
     }
     if (norm.startsWith("INSERT INTO whatsapp_messages")) {
-      const [id, user_id, idempotency_key] = args;
+      let id, user_id, message_id, idempotency_key, provider_message_id;
+      if (args.length >= 4) {
+        [id, user_id, message_id, idempotency_key, provider_message_id] = args;
+      } else {
+        [id, user_id, idempotency_key] = args;
+      }
       const exists = records.whatsapp_messages.find(x => x.user_id === user_id && x.idempotency_key === idempotency_key);
       if (exists) {
         return { rows: [], changes: 0, meta: { changes: 0 } };
       }
       records.whatsapp_messages.push({
-        id, user_id, idempotency_key,
-        status: "SENDING", provider_message_id: null, created_at: new Date().toISOString()
+        id, user_id, message_id: message_id || null, idempotency_key,
+        status: "SENT", provider_message_id: provider_message_id || null, created_at: new Date().toISOString()
       });
       return { rows: [{ id }], changes: 1, meta: { changes: 1 } };
     }

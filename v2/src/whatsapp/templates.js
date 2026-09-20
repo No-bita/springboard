@@ -1,291 +1,118 @@
 /**
  * Central WhatsApp Template Registry & Payload Generator
- * Collectrr v2 - WhatsApp Messaging Module
+ * Collectr Personal CRM - WhatsApp Messaging Module
  */
 
 export const WHATSAPP_TEMPLATES = {
   /**
-   * onboarding_first_message
-   *
-   * Meta template:
-   * Language: English (en)
-   *
-   * Body variables:
-   * {{name}}
-   * {{caname}}
-   *
-   * Button:
-   * Dynamic URL
+   * hello_world
+   * Meta Default Verification Template
    */
-  ONBOARDING_FIRST_MESSAGE: {
-    id: "onboarding_first_message",
-    name: "onboarding_first_message",
-    displayName: "ITR Onboarding (with Upload Button)",
-    defaultLang: "en",
+  HELLO_WORLD: {
+    id: "hello_world",
+    name: "hello_world",
+    displayName: "Meta Default (hello_world)",
+    defaultLang: "en_US",
     category: "UTILITY",
-    context: ["direct_outreach", "ca"],
-    description:
-      "ITR client onboarding message with CA/firm name and document upload button",
-    parameters: [
-      { key: "client_name", label: "Client Name", defaultField: "contactPerson" },
-      { key: "ca_name", label: "CA / Firm Name", defaultField: "firmName" },
-    ],
-
-    getPayloads: ({
-      phone,
-      contactPerson,
-      rawToken,
-      uploadLink,
-      langCode = "en",
-      templateParams = [],
-    }) => {
-      const clientName =
-        templateParams?.[0] ||
-        contactPerson ||
-        "Client";
-
-      const caName =
-        templateParams?.[1] ||
-        "Collectrr";
-
-      const tokenVal =
-        rawToken ||
-        "verify";
-
-      return [
-        {
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "template",
-
-          template: {
-            name: "onboarding_first_message",
-
-            language: {
-              code: langCode || "en",
-            },
-
-            components: [
-              {
-                type: "body",
-
-                parameters: [
-                  {
-                    type: "text",
-                    parameter_name: "name",
-                    text: String(clientName),
-                  },
-                  {
-                    type: "text",
-                    parameter_name: "caname",
-                    text: String(caName),
-                  },
-                ],
-              },
-
-              {
-                type: "button",
-                sub_type: "url",
-                index: "0",
-
-                parameters: [
-                  {
-                    type: "text",
-                    text: String(tokenVal),
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      ];
-    },
-  },
-
-  /**
-   * loan_agent_first_outreach
-   *
-   * Meta template:
-   * Language: English (en)
-   *
-   * Body variables:
-   * {{borrower_name}}
-   * {{username}}
-   * {{user_name}}
-   *
-   * Button:
-   * Dynamic URL
-   */
-  LOAN_AGENT_FIRST_OUTREACH: {
-    id: "loan_agent_first_outreach",
-    name: "loan_agent_first_outreach",
-    displayName: "Loan Agent Outreach",
-    defaultLang: "en",
-    category: "UTILITY",
-    context: ["loan_agent"],
-    description:
-      "Loan application outreach with borrower name, agent name, and contact details",
-    parameters: [
-      { key: "borrower_name", label: "Borrower Name", defaultField: "contactPerson" },
-      { key: "username", label: "Agent Name", defaultField: "userName" },
-      { key: "user_name", label: "Contact Detail", defaultField: "userPhone" },
-    ],
-
-    getPayloads: ({
-      phone,
-      contactPerson,
-      rawToken,
-      uploadLink,
-      langCode = "en",
-      templateParams = [],
-    }) => {
-      const borrowerName =
-        templateParams?.[0] ||
-        contactPerson ||
-        "Borrower";
-
-      const userName =
-        templateParams?.[1] ||
-        "Loan Team";
-
-      const contactDetail =
-        templateParams?.[2] ||
-        userName;
-
-      const tokenVal =
-        rawToken ||
-        "verify";
-
-      return [
-        {
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "template",
-
-          template: {
-            name: "loan_agent_first_outreach",
-
-            language: {
-              code: langCode || "en",
-            },
-
-            components: [
-              {
-                type: "body",
-
-                parameters: [
-                  {
-                    type: "text",
-                    parameter_name: "borrower_name",
-                    text: String(borrowerName),
-                  },
-                  {
-                    type: "text",
-                    parameter_name: "username",
-                    text: String(userName),
-                  },
-                  {
-                    type: "text",
-                    parameter_name: "user_name",
-                    text: String(contactDetail),
-                  },
-                ],
-              },
-
-              {
-                type: "button",
-                sub_type: "url",
-                index: "0",
-
-                parameters: [
-                  {
-                    type: "text",
-                    text: String(tokenVal),
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      ];
-    },
-  },
-
-  /**
-   * do_ca
-   *
-   * Meta template:
-   * Language: English (IND) / en_IN
-   *
-   * This is a completely parameter-free template.
-   */
-  DO_CA: {
-    id: "do_ca",
-    name: "do_ca",
-    displayName: "Direct Outreach (CA Default)",
-    defaultLang: "en_IN",
-    category: "MARKETING",
-    context: ["direct_outreach", "ca"],
-    description:
-      "Direct Outreach introductory message for CAs in English (IND)",
-    body_text:
-      "Kem cho?\n\nI came across your firm on Google and noticed you don't have a website.\n\nI made a sample for you to show how you can present your services, build trust online and make it easier for new clients to find you.\n\nWhat do you think?",
+    description: "Meta official default template for testing and connectivity",
+    body_text: "Hello World",
     parameters: [],
-
-    getPayloads: ({
-      phone,
-      langCode = "en_IN",
-    }) => [
+    getPayloads: ({ phone, langCode = "en_US" }) => [
       {
         messaging_product: "whatsapp",
         to: phone,
         type: "template",
-
         template: {
-          name: "do_ca",
-
+          name: "hello_world",
           language: {
-            code: langCode || "en_IN",
+            code: langCode || "en_US",
           },
         },
       },
     ],
   },
+
+  /**
+   * new_convo_1
+   * Clean Generic Introductory Outreach Template
+   */
+  NEW_CONVO_1: {
+    id: "new_convo_1",
+    name: "new_convo_1",
+    displayName: "Introductory Outreach (new_convo_1)",
+    defaultLang: "en",
+    category: "UTILITY",
+    description: "Generic introductory message with recipient and user names",
+    body_text: "Hi {{1}},\n\nThank you for connecting with {{2}}.\n\nPlease let us know how we can assist you.\n\nReply here if you have any questions.",
+    parameters: [
+      { key: "contact_name", label: "Contact Name", defaultField: "name" },
+      { key: "user_name", label: "Sender Name", defaultField: "userName" },
+    ],
+    getPayloads: ({
+      phone,
+      contactPerson,
+      name,
+      userName = "Collectr",
+      langCode = "en",
+      templateParams = [],
+    }) => {
+      const recipientName = templateParams?.[0] || name || contactPerson || "there";
+      const senderName = templateParams?.[1] || userName || "Collectr";
+
+      return [
+        {
+          messaging_product: "whatsapp",
+          to: phone,
+          type: "template",
+          template: {
+            name: "new_convo_1",
+            language: {
+              code: langCode || "en",
+            },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: String(recipientName),
+                  },
+                  {
+                    type: "text",
+                    text: String(senderName),
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ];
+    },
+  },
 };
 
 /**
  * Builds payload for a custom user-created WhatsApp template.
- *
- * Kept for future dynamic-template support.
- * The three hardcoded production templates above do not depend on this function.
  */
 export function buildCustomTemplatePayload(
   tpl,
-  {
+  options = {}
+) {
+  const {
     phone,
+    name,
     contactPerson,
     rawToken,
     uploadLink,
     langCode,
-    loanProduct,
-    amountRequired,
     referenceId,
     templateParams,
-  }
-) {
-  const lang =
-    langCode ||
-    tpl.language ||
-    tpl.defaultLang ||
-    "en";
+  } = options;
 
+  const lang = langCode || tpl.language || tpl.defaultLang || "en";
   const components = [];
 
-  let paramMappings =
-    tpl.param_mappings ||
-    tpl.paramMappings ||
-    {};
-
+  let paramMappings = tpl.param_mappings || tpl.paramMappings || {};
   if (typeof paramMappings === "string") {
     try {
       paramMappings = JSON.parse(paramMappings);
@@ -294,11 +121,9 @@ export function buildCustomTemplatePayload(
     }
   }
 
-  const resolveParamValue = (
-    mappingKey,
-    fallbackVal = "",
-    paramIndex = 0
-  ) => {
+  const recipientName = name || contactPerson || "there";
+
+  const resolveParamValue = (mappingKey, fallbackVal = "", paramIndex = 0) => {
     if (
       Array.isArray(templateParams) &&
       templateParams.length > paramIndex &&
@@ -308,10 +133,27 @@ export function buildCustomTemplatePayload(
       return String(templateParams[paramIndex]);
     }
 
+    if (mappingKey && options[mappingKey] !== undefined) {
+      return String(options[mappingKey]);
+    }
+    if (mappingKey === "loan_product" && (options.loanProduct || options.loan_product)) {
+      return String(options.loanProduct || options.loan_product);
+    }
+    if (mappingKey === "contact_person" && (options.contactPerson || options.name)) {
+      return String(options.contactPerson || options.name);
+    }
+    if (mappingKey === "upload_link" && (options.uploadLink || options.link)) {
+      return String(options.uploadLink || options.link);
+    }
+    if (mappingKey === "raw_token" && (options.rawToken || options.token)) {
+      return String(options.rawToken || options.token);
+    }
+
     switch (mappingKey) {
-      case "contact_person":
+      case "contact_name":
       case "name":
-        return contactPerson || "Client";
+      case "contact_person":
+        return recipientName;
 
       case "upload_link":
       case "link":
@@ -324,16 +166,6 @@ export function buildCustomTemplatePayload(
       case "phone":
         return phone || "";
 
-      case "loan_product":
-      case "category":
-        return loanProduct || "Verification";
-
-      case "amount_required":
-      case "amount":
-        return amountRequired
-          ? String(amountRequired)
-          : "";
-
       case "reference_id":
         return referenceId || "";
 
@@ -342,127 +174,58 @@ export function buildCustomTemplatePayload(
     }
   };
 
-  /**
-   * Header parameters
-   */
-  if (
-    (tpl.header_type === "TEXT" ||
-      tpl.headerType === "TEXT") &&
-    tpl.header_text
-  ) {
-    const headerParams = Array.isArray(
-      paramMappings.header
-    )
-      ? paramMappings.header
-      : [];
-
+  // Header parameters
+  if ((tpl.header_type === "TEXT" || tpl.headerType === "TEXT") && tpl.header_text) {
+    const headerParams = Array.isArray(paramMappings.header) ? paramMappings.header : [];
     if (headerParams.length > 0) {
       components.push({
         type: "header",
-
-        parameters: headerParams.map(
-          (mappingKey) => ({
-            type: "text",
-            text: resolveParamValue(
-              mappingKey,
-              contactPerson || "Client"
-            ),
-          })
-        ),
+        parameters: headerParams.map((mappingKey) => ({
+          type: "text",
+          text: resolveParamValue(mappingKey, recipientName),
+        })),
       });
     }
   }
 
-  /**
-   * Body parameters
-   */
-  const bodyText =
-    tpl.body_text ||
-    tpl.bodyText ||
-    "";
-
-  let bodyParamKeys = Array.isArray(
-    paramMappings.body
-  )
-    ? paramMappings.body
-    : [];
+  // Body parameters
+  const bodyText = tpl.body_text || tpl.bodyText || "";
+  let bodyParamKeys = Array.isArray(paramMappings.body) ? paramMappings.body : [];
 
   if (bodyParamKeys.length === 0) {
-    const matches =
-      bodyText.match(/\{\{(\d+)\}\}/g) ||
-      [];
-
-    bodyParamKeys = matches.map(
-      (_, idx) =>
-        idx === 0
-          ? "contact_person"
-          : "upload_link"
-    );
+    const matches = bodyText.match(/\{\{(\d+)\}\}/g) || [];
+    bodyParamKeys = matches.map((_, idx) => (idx === 0 ? "name" : "link"));
   }
 
   if (bodyParamKeys.length > 0) {
     components.push({
       type: "body",
-
-      parameters: bodyParamKeys.map(
-        (mappingKey, idx) => ({
-          type: "text",
-
-          text: resolveParamValue(
-            mappingKey,
-            idx === 0
-              ? contactPerson || "Client"
-              : uploadLink || "",
-            idx
-          ),
-        })
-      ),
+      parameters: bodyParamKeys.map((mappingKey, idx) => ({
+        type: "text",
+        text: resolveParamValue(mappingKey, idx === 0 ? recipientName : uploadLink || "", idx),
+      })),
     });
   }
 
-  /**
-   * Dynamic URL button
-   */
-  const buttonType = String(
-    tpl.button_type ||
-      tpl.buttonType ||
-      "none"
-  ).toLowerCase();
-
+  // Button parameters
+  const buttonType = String(tpl.button_type || tpl.buttonType || "none").toLowerCase();
   if (
     buttonType === "dynamic_url" ||
-    (
-      buttonType === "url" &&
-      Array.isArray(paramMappings.button) &&
-      paramMappings.button.length > 0
-    )
+    (buttonType === "url" && Array.isArray(paramMappings.button) && paramMappings.button.length > 0)
   ) {
-    const buttonParams =
-      Array.isArray(paramMappings.button)
-        ? paramMappings.button
-        : ["raw_token"];
-
+    const buttonParams = Array.isArray(paramMappings.button) ? paramMappings.button : ["raw_token"];
     components.push({
       type: "button",
       sub_type: "url",
       index: "0",
-
       parameters: [
         {
           type: "text",
-          text: resolveParamValue(
-            buttonParams[0],
-            rawToken || ""
-          ),
+          text: resolveParamValue(buttonParams[0], rawToken || ""),
         },
       ],
     });
-  }
-
-  /**
-   * Quick reply button
-   */
-  else if (
+  } else if (
     buttonType === "quick_reply" &&
     Array.isArray(paramMappings.button) &&
     paramMappings.button.length > 0
@@ -471,13 +234,10 @@ export function buildCustomTemplatePayload(
       type: "button",
       sub_type: "quick_reply",
       index: "0",
-
       parameters: [
         {
           type: "payload",
-          payload:
-            tpl.button_payload ||
-            "ACTION_PROCEED",
+          payload: tpl.button_payload || "ACTION_PROCEED",
         },
       ],
     });
@@ -487,10 +247,8 @@ export function buildCustomTemplatePayload(
     messaging_product: "whatsapp",
     to: phone,
     type: "template",
-
     template: {
       name: tpl.name,
-
       language: {
         code: lang,
       },
@@ -498,142 +256,90 @@ export function buildCustomTemplatePayload(
   };
 
   if (components.length > 0) {
-    primaryPayload.template.components =
-      components;
-
-    return [primaryPayload];
+    primaryPayload.template.components = components;
   }
 
   return [primaryPayload];
 }
 
 /**
- * Resolve WhatsApp Template Config by Name
- *
- * Hardcoded templates take priority.
- * Custom templates remain supported for future use.
+ * Resolve WhatsApp Template Config by Name or ID
  */
-export function getWhatsAppTemplate(
-  templateName,
-  env,
-  customTemplates = []
-) {
-  const name =
-    templateName ||
-    "onboarding_first_message";
+export function getWhatsAppTemplate(templateIdentifier, env, customTemplates = []) {
+  const id = String(templateIdentifier || "new_convo_1").trim();
 
-  if (
-    name === "loan_agent_first_outreach"
-  ) {
-    return WHATSAPP_TEMPLATES
-      .LOAN_AGENT_FIRST_OUTREACH;
+  if (id === "hello_world") {
+    return WHATSAPP_TEMPLATES.HELLO_WORLD;
   }
 
-  if (
-    name === "onboarding_first_message"
-  ) {
-    return WHATSAPP_TEMPLATES
-      .ONBOARDING_FIRST_MESSAGE;
+  if (id === "new_convo_1") {
+    return WHATSAPP_TEMPLATES.NEW_CONVO_1;
   }
 
-  if (name === "do_ca") {
-    return WHATSAPP_TEMPLATES.DO_CA;
-  }
-
-  /**
-   * Future custom-template support
-   */
-  if (
-    Array.isArray(customTemplates) &&
-    customTemplates.length > 0
-  ) {
-    const custom =
-      customTemplates.find(
-        (template) =>
-          template.name === name ||
-          template.id === name
-      );
+  // Check custom templates
+  if (Array.isArray(customTemplates) && customTemplates.length > 0) {
+    const custom = customTemplates.find(
+      (t) => t.name === id || t.id === id
+    );
 
     if (custom) {
       return {
         id: custom.id,
-
         name: custom.name,
-
-        defaultLang:
-          custom.language || "en",
-
-        category:
-          custom.category || "UTILITY",
-
-        description:
-          custom.body_text ||
-          custom.name,
-
-        getPayloads: (params) =>
-          buildCustomTemplatePayload(
-            custom,
-            params
-          ),
+        defaultLang: custom.language || "en",
+        category: custom.category || "UTILITY",
+        description: custom.body_text || custom.name,
+        getPayloads: (params) => buildCustomTemplatePayload(custom, params),
       };
     }
   }
 
-  return WHATSAPP_TEMPLATES
-    .ONBOARDING_FIRST_MESSAGE;
+  return WHATSAPP_TEMPLATES.NEW_CONVO_1;
 }
 
 /**
  * Render the exact WhatsApp message body for a given template and parameters.
- * Guarantees that the exact dispatched body is stored in the database.
  */
 export function renderTemplateBody(
-  templateName,
+  templateIdentifier,
   {
-    contactPerson = "Client",
-    userName = "Loan Team",
-    userPhone = "",
-    rawToken = "",
-    uploadLink = "",
+    name = "there",
+    contactPerson,
+    userName = "Collectr",
     templateParams = [],
-    customTemplates = []
+    customTemplates = [],
   } = {}
 ) {
-  const name = String(templateName || "").trim().toLowerCase();
+  const id = String(templateIdentifier || "").trim().toLowerCase();
+  const recipient = name || contactPerson || "there";
 
-  if (name === "loan_agent_first_outreach" || name.includes("loan_agent")) {
-    const borrowerName = templateParams?.[0] || contactPerson || "Borrower";
-    const agentName = templateParams?.[1] || userName || "Loan Team";
-    const contactDetail = templateParams?.[2] || userPhone || agentName;
-    return `Namaste ${borrowerName},\n\nLoan application has been initiated by ${agentName}.\n\nPlease upload the requested documents using the secure link below or reach out at ${contactDetail}.\n\nIf you have any questions, please contact us.`;
-  }
-
-  if (name === "do_ca") {
-    return `Kem cho?\n\nI came across your firm on Google and noticed you don't have a website.\n\nI made a sample for you to show how you can present your services, build trust online and make it easier for new clients to find you.\n\nWhat do you think?`;
+  if (id === "hello_world") {
+    return "Hello World";
   }
 
   if (Array.isArray(customTemplates) && customTemplates.length > 0) {
     const custom = customTemplates.find(
-      (t) => (t.name || "").toLowerCase() === name || (t.id || "").toLowerCase() === name
+      (t) => (t.name || "").toLowerCase() === id || (t.id || "").toLowerCase() === id
     );
     if (custom && custom.body_text) {
       let rendered = custom.body_text;
       if (Array.isArray(templateParams) && templateParams.length > 0) {
         templateParams.forEach((val, idx) => {
-          rendered = rendered.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), String(val));
+          rendered = rendered.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, "g"), String(val));
         });
       }
       rendered = rendered
-        .replace(/\{\{1\}\}/g, contactPerson || "Client")
-        .replace(/\{\{name\}\}/gi, contactPerson || "Client")
-        .replace(/\{\{client_name\}\}/gi, contactPerson || "Client")
-        .replace(/\{\{caname\}\}/gi, userName || "Collectrr");
+        .replace(/\{\{1\}\}/g, recipient)
+        .replace(/\{\{name\}\}/gi, recipient)
+        .replace(/\{\{contact_name\}\}/gi, recipient)
+        .replace(/\{\{2\}\}/g, userName)
+        .replace(/\{\{user_name\}\}/gi, userName);
       return rendered;
     }
   }
 
-  // Default: onboarding_first_message
-  const clientName = templateParams?.[0] || contactPerson || "Client";
-  const caName = templateParams?.[1] || "Collectrr";
-  return `Hi ${clientName},\n\nThank you for trusting ${caName}.\n\nTo get started with your ITR filing, please upload the required documents using the button below.\n\nReply here if you need any help.`;
+  // Default new_convo_1
+  const param1 = templateParams?.[0] || recipient;
+  const param2 = templateParams?.[1] || userName;
+  return `Hi ${param1},\n\nThank you for connecting with ${param2}.\n\nPlease let us know how we can assist you.\n\nReply here if you have any questions.`;
 }

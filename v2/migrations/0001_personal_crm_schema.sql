@@ -1,4 +1,4 @@
--- Collectr Personal CRM Canonical Database Schema
+-- Collectr Personal CRM Initial Migration
 
 -- 1. Users & Tenancy
 CREATE TABLE IF NOT EXISTS users (
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  phone_number TEXT NOT NULL, -- E.164 digits without leading '+' (e.g. 919876543210)
+  phone_number TEXT NOT NULL,
   email TEXT,
   company TEXT,
   notes TEXT,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
-  channel TEXT NOT NULL DEFAULT 'whatsapp', -- 'whatsapp' | 'email'
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
   last_message_at DATETIME,
   unread_count INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
-  title TEXT NOT NULL, -- e.g. "Send PAN", "Confirm meeting for Friday", "Approve design"
+  title TEXT NOT NULL,
   description TEXT,
-  status TEXT NOT NULL DEFAULT 'open', -- 'open', 'waiting_on_them', 'needs_follow_up', 'waiting_on_me', 'completed', 'cancelled'
+  status TEXT NOT NULL DEFAULT 'open',
   due_date DATETIME,
   completed_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -72,8 +72,8 @@ CREATE INDEX IF NOT EXISTS idx_requests_user_status ON requests(user_id, status)
 CREATE TABLE IF NOT EXISTS request_items (
   id TEXT PRIMARY KEY,
   request_id TEXT NOT NULL,
-  title TEXT NOT NULL, -- e.g. "PAN Copy", "Signed NDA", "Meeting time confirmed"
-  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'done' | 'waived'
+  title TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
   file_url TEXT,
   s3_key TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS request_items (
 -- 6. Message Templates (Clean Generic Registry)
 CREATE TABLE IF NOT EXISTS message_templates (
   id TEXT PRIMARY KEY,
-  user_id TEXT, -- NULL for system templates
+  user_id TEXT,
   name TEXT NOT NULL,
   category TEXT DEFAULT 'UTILITY',
   channel TEXT NOT NULL DEFAULT 'whatsapp',
@@ -112,15 +112,15 @@ CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  request_id TEXT, -- NULLABLE: Attributed when message explicitly belongs to a request
-  direction TEXT NOT NULL, -- 'outbound' | 'inbound'
-  channel TEXT NOT NULL DEFAULT 'whatsapp', -- 'whatsapp' | 'email'
-  sender_type TEXT NOT NULL, -- 'user' | 'contact' | 'system'
+  request_id TEXT,
+  direction TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  sender_type TEXT NOT NULL,
   content TEXT,
-  template_id TEXT, -- NULLABLE: References message_templates.id
-  provider TEXT NOT NULL DEFAULT 'meta_whatsapp', -- 'meta_whatsapp' | 'resend'
-  provider_message_id TEXT, -- e.g. wamid...
-  delivery_status TEXT, -- NULL for inbound; 'queued' | 'sent' | 'delivered' | 'read' | 'failed' for outbound
+  template_id TEXT,
+  provider TEXT NOT NULL DEFAULT 'meta_whatsapp',
+  provider_message_id TEXT,
+  delivery_status TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
   FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
@@ -140,9 +140,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS unq_messages_provider ON messages(provider, pr
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  message_id TEXT, -- Explicit link to product messages table
+  message_id TEXT,
   idempotency_key TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | SENDING | SENT | FAILED | UNKNOWN
+  status TEXT NOT NULL DEFAULT 'PENDING',
   provider_message_id TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -174,8 +174,8 @@ CREATE TABLE IF NOT EXISTS activities (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
-  request_id TEXT, -- NULLABLE
-  activity_type TEXT NOT NULL, -- 'outreach_sent' | 'contact_replied' | 'request_created' | 'request_item_done' | 'request_completed' | 'note_added' | 'schedule_created'
+  request_id TEXT,
+  activity_type TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
   metadata JSON,
@@ -192,15 +192,15 @@ CREATE TABLE IF NOT EXISTS schedules (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
-  request_id TEXT, -- NULLABLE
+  request_id TEXT,
   channel TEXT NOT NULL DEFAULT 'whatsapp',
-  template_id TEXT, -- NULLABLE
-  message_body TEXT, -- NULLABLE
-  payload_snapshot JSON NOT NULL, -- Immutable snapshot of payload/params at schedule time
+  template_id TEXT,
+  message_body TEXT,
+  payload_snapshot JSON NOT NULL,
   schedule_type TEXT NOT NULL DEFAULT 'one_off',
   recurrence_interval TEXT,
   timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
-  status TEXT NOT NULL DEFAULT 'active', -- 'active' | 'completed' | 'cancelled'
+  status TEXT NOT NULL DEFAULT 'active',
   next_run_utc DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   cancelled_at DATETIME,
@@ -225,11 +225,11 @@ CREATE TABLE IF NOT EXISTS scheduled_occurrences (
   channel TEXT NOT NULL DEFAULT 'whatsapp',
   recipient_phone TEXT,
   recipient_email TEXT,
-  operational_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'claimed' | 'completed' | 'skipped' | 'failed' | 'unknown'
+  operational_status TEXT NOT NULL DEFAULT 'pending',
   claimed_at DATETIME,
   attempts INTEGER NOT NULL DEFAULT 0,
   provider_message_id TEXT,
-  message_id TEXT, -- Links execution to product messages record
+  message_id TEXT,
   skip_reason TEXT,
   last_error TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -260,8 +260,8 @@ CREATE TABLE IF NOT EXISTS credit_reservations (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   amount_paise INTEGER NOT NULL,
-  reference_id TEXT NOT NULL, -- Unique reference (e.g. idempotency_key or occurrence_id)
-  status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'CAPTURED' | 'RELEASED'
+  reference_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,

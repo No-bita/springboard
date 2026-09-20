@@ -143,7 +143,7 @@
           <label for="password">Password</label>
           <div style="position: relative;">
             <input type="password" id="password" class="input-field" placeholder="Create a password (min 6 chars)" style="padding-right: 2.75rem;" required minlength="6" />
-            <button type="button" id="togglePasswordBtn" title="Toggle password visibility" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 0.2rem;">👁️</button>
+            <button type="button" id="togglePasswordBtn" title="Toggle password visibility" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; font-weight: 500; padding: 0.2rem;">Show</button>
           </div>
         </div>
         <button type="submit" class="btn-submit" id="submitBtn">Register</button>
@@ -164,7 +164,7 @@
       togglePasswordBtn.onclick = () => {
         const isPassword = passwordInput.type === 'password';
         passwordInput.type = isPassword ? 'text' : 'password';
-        togglePasswordBtn.textContent = isPassword ? '🙈' : '👁️';
+        togglePasswordBtn.textContent = isPassword ? 'Hide' : 'Show';
       };
 
       form.onsubmit = async (e) => {
