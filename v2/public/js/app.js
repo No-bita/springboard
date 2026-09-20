@@ -239,7 +239,10 @@ function setAttentionFilter(filterType) {
       activeBadge.style.display = "none";
     } else {
       activeBadge.style.display = "inline-flex";
-      activeBadge.innerHTML = `Filtered: <strong>${filterType.replace(/_/g, ' ')}</strong> <button type="button" onclick="setAttentionFilter('all')" style="border: none; background: none; cursor: pointer; margin-left: 4px;">✕</button>`;
+      const displayLabel = filterType.startsWith("delivery_")
+        ? `Delivery: ${filterType.replace("delivery_", "")}`
+        : filterType.replace(/_/g, " ");
+      activeBadge.innerHTML = `Filtered: <strong>${displayLabel}</strong> <button type="button" onclick="setAttentionFilter('all')" style="border: none; background: none; cursor: pointer; margin-left: 4px;">✕</button>`;
     }
   }
 
@@ -277,20 +280,24 @@ function renderTable() {
 
     // Status / Triage category filter
     if (currentFilter === "all") return true;
-    if (currentFilter === "attention") {
-      return Boolean(c.unread_messages > 0 || c.active_requests_count > 0 || c.delivery_status === "failed");
+    if (currentFilter.startsWith("delivery_")) {
+      const targetDel = currentFilter.replace("delivery_", "");
+      return (c.latest_delivery_status || c.delivery_status || c.latestMessage?.delivery_status || "").toLowerCase() === targetDel;
+    }
+    if (currentFilter === "attention" || currentFilter === "needs_attention") {
+      return (c.actionStatus === "needs_attention" || Boolean(c.unread_messages > 0 || c.unreadCount > 0 || c.active_requests_count > 0 || c.delivery_status === "failed" || c.latestMessage?.delivery_status === "failed"));
     }
     if (currentFilter === "needs_follow_up") {
-      return (c.latest_request_status === "needs_follow_up" || c.status === "needs_follow_up");
+      return (c.actionStatus === "needs_follow_up" || c.latest_request_status === "needs_follow_up" || c.status === "needs_follow_up" || c.activeRequest?.status === "needs_follow_up");
     }
     if (currentFilter === "waiting_on_them") {
-      return (c.latest_request_status === "waiting_on_them" || c.status === "waiting_on_them");
+      return (c.actionStatus === "waiting_on_them" || c.latest_request_status === "waiting_on_them" || c.status === "waiting_on_them" || c.activeRequest?.status === "waiting_on_them");
     }
     if (currentFilter === "recently_replied") {
-      return Boolean(c.last_inbound_at || c.delivery_status === "replied");
+      return (c.actionStatus === "recently_replied" || Boolean(c.last_inbound_at || c.lastInboundAt || c.delivery_status === "replied"));
     }
     if (currentFilter === "completed") {
-      return (c.latest_request_status === "completed" || c.status === "completed");
+      return (c.actionStatus === "completed" || c.latest_request_status === "completed" || c.status === "completed" || c.activeRequest?.status === "completed");
     }
     return true;
   });
@@ -302,7 +309,7 @@ function renderTable() {
         : `in ${currentFilter.replace(/_/g, ' ')}`;
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" style="text-align: center; padding: 3.5rem 1rem;">
+          <td colspan="6" style="text-align: center; padding: 3.5rem 1rem;">
             <div style="font-size: 14px; font-weight: 600; color: #171717; margin-bottom: 10px;">No targets ${filterLabel}</div>
             <button type="button" onclick="clearAllFilters()" style="padding: 6px 14px; background: #F4F3EF; border: 1px solid #ECE8DF; border-radius: 6px; font-size: 12px; font-weight: 500; color: #171717; cursor: pointer;">Clear filter</button>
           </td>
@@ -311,7 +318,7 @@ function renderTable() {
     } else {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" style="text-align: center; padding: 4rem 1rem;">
+          <td colspan="6" style="text-align: center; padding: 4rem 1rem;">
             <div style="font-size: 15px; font-weight: 600; color: #171717; margin-bottom: 12px;">No targets yet</div>
             <button type="button" onclick="openContactModal()" style="padding: 8px 18px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">+ Add Target</button>
           </td>
@@ -331,28 +338,47 @@ function renderTable() {
     const latestMsg = c.latest_message_content || c.latest_message || "No messages sent yet.";
     const rawDeliveryStatus = (c.latest_delivery_status || c.delivery_status || c.latestMessage?.delivery_status || "").toLowerCase();
 
-    // Fixed Status Buckets: Replied, Read, Delivered, Sent, Failed, Queued (transitory), New
-    let statusBadge;
+    // 1. Delivery Status Badge
+    let deliveryBadge;
     if (rawDeliveryStatus === "replied" || c.lastInboundAt || c.last_inbound_at) {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #DCFCE7; color: #15803D;">Replied</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #DCFCE7; color: #15803D;">Replied</span>`;
     } else if (rawDeliveryStatus === "read") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #ECFDF5; color: #047857;">Read</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #ECFDF5; color: #047857;">Read</span>`;
     } else if (rawDeliveryStatus === "delivered") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #EFF6FF; color: #1D4ED8;">Delivered</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #EFF6FF; color: #1D4ED8;">Delivered</span>`;
     } else if (rawDeliveryStatus === "failed") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEE2E2; color: #991B1B;">Failed</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEE2E2; color: #991B1B;">Failed</span>`;
     } else if (rawDeliveryStatus === "sent" || c.lastOutboundAt || c.last_outbound_at) {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #4B5563;">Sent</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #4B5563;">Sent</span>`;
     } else if (rawDeliveryStatus === "queued" || rawDeliveryStatus === "claimed" || rawDeliveryStatus === "dispatch_requested") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEF3C7; color: #92400E;">Queued</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEF3C7; color: #92400E;">Queued</span>`;
     } else {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Pending</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Pending</span>`;
     }
 
-    const lastDate = c.last_interaction_at || c.last_updated || c.created_at;
-    const lastActivityStr = lastDate
-      ? new Date(lastDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-      : "—";
+    // 2. Action Status Badge
+    const resolvedActionStatus = c.actionStatus || c.action_status || (
+      (c.unreadCount > 0 || c.unread_messages > 0 || c.activeRequest?.status === "waiting_on_me" || rawDeliveryStatus === "failed") ? "needs_attention" :
+      (c.activeRequest?.status === "needs_follow_up") ? "needs_follow_up" :
+      (c.lastInboundAt || c.last_inbound_at || rawDeliveryStatus === "replied") ? "recently_replied" :
+      (c.activeRequest?.status === "waiting_on_them" || c.lastOutboundAt || c.last_outbound_at) ? "waiting_on_them" :
+      (c.activeRequest?.status === "completed") ? "completed" : "idle"
+    );
+
+    let actionBadge;
+    if (resolvedActionStatus === "needs_attention") {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEF2F2; color: #DC2626;">Needs Attention</span>`;
+    } else if (resolvedActionStatus === "needs_follow_up") {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FFF7ED; color: #EA580C;">Needs Follow-Up</span>`;
+    } else if (resolvedActionStatus === "waiting_on_them") {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #EFF6FF; color: #2563EB;">Waiting on Them</span>`;
+    } else if (resolvedActionStatus === "recently_replied") {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #ECFDF5; color: #059669;">Recently Replied</span>`;
+    } else if (resolvedActionStatus === "completed") {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F1F5F9; color: #475569;">Completed</span>`;
+    } else {
+      actionBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Idle</span>`;
+    }
 
     return `
       <tr onclick="if(!event.target.closest('button') && !event.target.closest('input')) window.location.href='/case.html?id=' + encodeURIComponent('${contactId}')" style="border-bottom: 1px solid #ECE8DF; font-size: 14px; cursor: pointer; transition: background 0.1s;" onmouseover="this.style.background='#FAF9F6'" onmouseout="this.style.background='transparent'">
@@ -360,13 +386,15 @@ function renderTable() {
         <td style="padding: 14px 16px;">
           <a href="/case.html?id=${encodeURIComponent(contactId)}" style="font-weight: 600; color: #171717; text-decoration: none; font-size: 14px;">${name}</a>
         </td>
-        <td style="padding: 14px 16px; color: #374151; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <td style="padding: 14px 16px; color: #374151; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
           ${latestMsg}
         </td>
         <td style="padding: 14px 16px;">
-          ${statusBadge}
+          ${deliveryBadge}
         </td>
-        <!-- <td style="padding: 14px 16px; color: #6E6A62; font-size: 13px;">${lastActivityStr}</td> -->
+        <td style="padding: 14px 16px;">
+          ${actionBadge}
+        </td>
         <td style="text-align: center; padding: 14px 16px;">
           <a href="/case.html?id=${encodeURIComponent(contactId)}" style="display: inline-block; padding: 6px 12px; font-size: 13px; font-weight: 500; background: #F4F3EF; color: #171717; border-radius: 6px; text-decoration: none;">Open</a>
         </td>

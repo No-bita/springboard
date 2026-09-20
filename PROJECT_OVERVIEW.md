@@ -11,14 +11,15 @@ Collectrr is a serverless, edge-deployed **Personal CRM for keeping work moving 
 ### Core Architecture Principles
 1. **Contact is Primary**: The core unit of work is the `Contact` (belonging to a `User`). A contact can have active conversations across channels, outstanding requests, scheduled follow-ups, and an activity log.
 2. **Generic Requests**: Instead of vertical-specific loan/CA cases, Collectrr manages generic `requests` and `request_items` (e.g. "Send signed contract", "Upload PAN & GST", "Confirm time for Friday").
-3. **Decoupled Work State vs Transport Telemetry**:
-   - **Work State**: `open` → `waiting_on_them` → `needs_follow_up` → `waiting_on_me` → `completed` | `cancelled`
-   - **Transport Telemetry**: `queued` → `sent` → `delivered` → `read` | `failed`
+3. **Decoupled Work State vs Transport Telemetry (Split Columns)**:
+   - **Action Status**: `Needs Attention` | `Needs Follow-Up` | `Waiting on Them` | `Recently Replied` | `Completed` | `Idle`
+   - **Delivery Status**: `Replied` | `Read` | `Delivered` | `Sent` | `Queued` | `Failed` | `Pending`
 4. **Attention-Centric Triage**: The dashboard triages contacts by actionability:
    - **Needs Attention**: `waiting_on_me` request, failed outbound message, or unread inbound reply.
    - **Needs Follow-Up**: request in `needs_follow_up` state.
    - **Waiting on Them**: request in `waiting_on_them` state or outbound message sent.
    - **Recently Replied**: Inbound response received in the last 48 hours.
+   - **Split Table Presentation**: Main table renders dedicated `Delivery` and `Action Status` columns to eliminate ambiguity between communication delivery and workflow next steps.
 
 ---
 

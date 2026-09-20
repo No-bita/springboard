@@ -125,39 +125,42 @@ export async function handleGetContacts(c) {
       const hasUnread = (c.unreadCount || 0) > 0;
 
       if (isWaitingOnMe || hasFailedMsg || hasUnread) {
+        c.actionStatus = "needs_attention";
+        c.action_status = "needs_attention";
         attentionCounts.needsAttention++;
-      }
-
-      // Needs Follow-Up
-      if (c.activeRequest?.status === "needs_follow_up") {
+      } else if (c.activeRequest?.status === "needs_follow_up") {
+        c.actionStatus = "needs_follow_up";
+        c.action_status = "needs_follow_up";
         attentionCounts.needsFollowUp++;
-      }
-
-      // Waiting On Them
-      if (c.activeRequest?.status === "waiting_on_them" || (c.latestMessage?.direction === "outbound" && !c.activeRequest)) {
-        attentionCounts.waitingOnThem++;
-      }
-
-      // Recently Replied (last 48 hours)
-      if (c.lastInboundAt && c.lastInboundAt >= fortyEightHoursAgo) {
+      } else if (c.lastInboundAt && c.lastInboundAt >= fortyEightHoursAgo) {
+        c.actionStatus = "recently_replied";
+        c.action_status = "recently_replied";
         attentionCounts.recentlyReplied++;
+      } else if (c.activeRequest?.status === "waiting_on_them" || (c.latestMessage?.direction === "outbound" && !c.activeRequest)) {
+        c.actionStatus = "waiting_on_them";
+        c.action_status = "waiting_on_them";
+        attentionCounts.waitingOnThem++;
+      } else if (c.activeRequest?.status === "completed") {
+        c.actionStatus = "completed";
+        c.action_status = "completed";
+      } else {
+        c.actionStatus = "idle";
+        c.action_status = "idle";
       }
     }
 
     // Apply client filter if requested
     let filteredContacts = contacts;
-    if (filter === "needs_attention") {
-      filteredContacts = contacts.filter(c => 
-        c.activeRequest?.status === "waiting_on_me" || 
-        c.latestMessage?.delivery_status === "failed" || 
-        (c.unreadCount || 0) > 0
-      );
+    if (filter === "needs_attention" || filter === "attention") {
+      filteredContacts = contacts.filter(c => c.actionStatus === "needs_attention");
     } else if (filter === "needs_follow_up") {
-      filteredContacts = contacts.filter(c => c.activeRequest?.status === "needs_follow_up");
+      filteredContacts = contacts.filter(c => c.actionStatus === "needs_follow_up");
     } else if (filter === "waiting_on_them") {
-      filteredContacts = contacts.filter(c => c.activeRequest?.status === "waiting_on_them");
+      filteredContacts = contacts.filter(c => c.actionStatus === "waiting_on_them");
     } else if (filter === "recently_replied") {
-      filteredContacts = contacts.filter(c => c.lastInboundAt && c.lastInboundAt >= fortyEightHoursAgo);
+      filteredContacts = contacts.filter(c => c.actionStatus === "recently_replied");
+    } else if (filter === "completed") {
+      filteredContacts = contacts.filter(c => c.actionStatus === "completed");
     }
 
     return c.json({

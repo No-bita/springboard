@@ -139,11 +139,20 @@
             </span>
             <select id="statusFilter" class="filter-select-pill" onchange="onFilterChange()" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #ECE8DF; background: #ffffff; font-size: 13px; cursor: pointer;">
               <option value="all">All Statuses</option>
-              <option value="attention">Needs Attention</option>
-              <option value="needs_follow_up">Needs Follow-Up</option>
-              <option value="waiting_on_them">Waiting on Them</option>
-              <option value="recently_replied">Recently Replied</option>
-              <option value="completed">Completed</option>
+              <optgroup label="Action Status">
+                <option value="attention">Needs Attention</option>
+                <option value="needs_follow_up">Needs Follow-Up</option>
+                <option value="waiting_on_them">Waiting on Them</option>
+                <option value="recently_replied">Recently Replied</option>
+                <option value="completed">Completed</option>
+              </optgroup>
+              <optgroup label="Delivery Status">
+                <option value="delivery_delivered">Delivered</option>
+                <option value="delivery_read">Read</option>
+                <option value="delivery_replied">Replied</option>
+                <option value="delivery_sent">Sent</option>
+                <option value="delivery_failed">Failed</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -153,16 +162,17 @@
             <thead>
               <tr id="casesTableHeadRow" style="border-bottom: 1px solid #ECE8DF; background: #FAF9F6; font-size: 13px; color: #6E6A62; text-align: left;">
                 <th style="width: 4%; text-align: center; padding: 12px 16px;" id="thIndex">#</th>
-                <th style="width: 30%; padding: 12px 16px;" id="thCustomer">Name</th>
-                <th style="width: 40%; padding: 12px 16px;" id="thLatestMessage">Last Message</th>
-                <th style="width: 16%; padding: 12px 16px;" id="thStatus">Status</th>
+                <th style="width: 24%; padding: 12px 16px;" id="thCustomer">Name</th>
+                <th style="width: 32%; padding: 12px 16px;" id="thLatestMessage">Last Message</th>
+                <th style="width: 15%; padding: 12px 16px;" id="thDelivery">Delivery</th>
+                <th style="width: 17%; padding: 12px 16px;" id="thActionStatus">Action Status</th>
                 <!-- <th style="width: 16%; padding: 12px 16px;" id="thLastActivity">Last Activity</th> -->
-                <th style="width: 10%; text-align: center; padding: 12px 16px;" id="thAction">Actions</th>
+                <th style="width: 8%; text-align: center; padding: 12px 16px;" id="thAction">Actions</th>
               </tr>
             </thead>
             <tbody id="tbody">
               <tr>
-                <td colspan="5" style="text-align: center; padding: 2.5rem; color: #6E6A62;">Loading targets...</td>
+                <td colspan="6" style="text-align: center; padding: 2.5rem; color: #6E6A62;">Loading targets...</td>
               </tr>
             </tbody>
           </table>
