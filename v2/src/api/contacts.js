@@ -486,6 +486,45 @@ export async function handleGetContactWorkspace(c) {
     // 5. Compute 24-hour customer window status
     const windowStatus = await getCustomerReplyWindowStatus(db, contactId);
 
+    // 6. Compute Delivery & Action Status
+    let deliveryStatus = "not_contacted";
+    const inboundMsgs = messages.filter(m => m.direction === "inbound" || m.sender_type === "contact");
+    const outboundMsgs = messages.filter(m => m.direction === "outbound" || !m.direction);
+    const latestOutbound = outboundMsgs.length > 0 ? outboundMsgs[outboundMsgs.length - 1] : null;
+
+    if (inboundMsgs.length > 0 || contact.last_inbound_at || windowStatus?.hasReplied) {
+      deliveryStatus = "replied";
+    } else if (latestOutbound) {
+      const st = (latestOutbound.delivery_status || "sent").toLowerCase();
+      if (st === "read") deliveryStatus = "read";
+      else if (st === "delivered") deliveryStatus = "delivered";
+      else if (st === "failed") deliveryStatus = "failed";
+      else if (st === "queued" || st === "claimed" || st === "dispatch_requested") deliveryStatus = "queued";
+      else deliveryStatus = "sent";
+    } else if (contact.last_outbound_at) {
+      deliveryStatus = "sent";
+    }
+
+    const nowTime = Date.now();
+    const fortyEightHoursAgo = new Date(nowTime - 48 * 3600 * 1000).toISOString();
+    const activeRequest = requests.find(r => r.status !== "completed" && r.status !== "cancelled");
+    const isWaitingOnMe = activeRequest?.status === "waiting_on_me";
+    const hasFailedMsg = latestOutbound?.delivery_status === "failed";
+    const hasUnread = (conversation?.unread_count || 0) > 0;
+
+    let actionStatus = "idle";
+    if (isWaitingOnMe || hasFailedMsg || hasUnread) {
+      actionStatus = "needs_attention";
+    } else if (activeRequest?.status === "needs_follow_up") {
+      actionStatus = "needs_follow_up";
+    } else if (contact.last_inbound_at && contact.last_inbound_at >= fortyEightHoursAgo) {
+      actionStatus = "recently_replied";
+    } else if (activeRequest?.status === "waiting_on_them" || outboundMsgs.length > 0) {
+      actionStatus = "waiting_on_them";
+    } else if (activeRequest?.status === "completed" || (requests.length > 0 && requests.every(r => r.status === "completed"))) {
+      actionStatus = "completed";
+    }
+
     return c.json({
       success: true,
       contact: {
@@ -495,6 +534,8 @@ export async function handleGetContactWorkspace(c) {
         email: contact.email,
         company: contact.company,
         notes: contact.notes,
+        deliveryStatus,
+        actionStatus,
         lastOutboundAt: contact.last_outbound_at,
         lastInboundAt: contact.last_inbound_at,
         lastInteractionAt: contact.last_interaction_at,

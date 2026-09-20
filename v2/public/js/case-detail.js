@@ -61,7 +61,8 @@ async function loadContactWorkspace() {
     const data = await res.json();
     currentContact = data.contact || data;
 
-    renderBanner(currentContact, data.messages || [], data.customerWindow);
+    renderBanner(currentContact, data.messages || [], data.customerWindow, data.requests || []);
+    renderNextAction(currentContact, data.messages || [], data.requests || [], data.activities || []);
     renderMessages(data.messages || []);
     renderRequests(data.requests || []);
     renderActivities(data.activities || []);
@@ -107,8 +108,81 @@ function sanitizeEmail(email) {
   return `${start}***${end}@${domain}`;
 }
 
-function resolveContactStatus(contact, messages = [], customerWindow = null) {
-  const hasInbound = messages.some(m => m.direction === 'inbound' || m.sender_type === 'contact') || (customerWindow && customerWindow.hasReplied);
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffSec = Math.floor((now - date) / 1000);
+  if (diffSec < 0 || diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDays = Math.floor(diffHour / 24);
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+}
+
+function buildContactContextLine(contact, messages = [], requests = []) {
+  const parts = [];
+
+  // 1. Company if present
+  if (contact && contact.company) {
+    parts.push(contact.company);
+  }
+
+  // 2. Latest Interaction / Outreach context
+  const inboundMsgs = messages.filter(m => m.direction === 'inbound' || m.sender_type === 'contact');
+  const outboundMsgs = messages.filter(m => m.direction === 'outbound' || !m.direction);
+  const latestInbound = inboundMsgs.length > 0 ? inboundMsgs[inboundMsgs.length - 1] : null;
+  const latestOutbound = outboundMsgs.length > 0 ? outboundMsgs[outboundMsgs.length - 1] : null;
+
+  const lastInboundTime = latestInbound?.created_at || contact?.lastInboundAt || contact?.last_inbound_at;
+  const lastOutboundTime = latestOutbound?.created_at || contact?.lastOutboundAt || contact?.last_outbound_at;
+
+  const activeRequest = (requests || []).find(r => r.status !== 'completed' && r.status !== 'cancelled');
+
+  if (lastInboundTime && (!lastOutboundTime || new Date(lastInboundTime) >= new Date(lastOutboundTime))) {
+    const channel = (latestInbound?.channel || 'whatsapp').toLowerCase() === 'email' ? 'Email' : 'WhatsApp';
+    const time = formatRelativeTime(lastInboundTime);
+    parts.push(`Replied ${time} via ${channel}`);
+  } else if (latestOutbound) {
+    const channel = (latestOutbound.channel || 'whatsapp').toLowerCase() === 'email' ? 'Email' : 'WhatsApp';
+    const st = (latestOutbound.delivery_status || 'sent').toLowerCase();
+    const time = formatRelativeTime(lastOutboundTime);
+    if (st === 'read') {
+      parts.push(`Read ${time} via ${channel}`);
+    } else if (st === 'delivered') {
+      parts.push(`Delivered ${time} via ${channel}`);
+    } else if (st === 'failed') {
+      parts.push(`Delivery failed ${time} via ${channel}`);
+    } else {
+      parts.push(`Outreach sent ${time} via ${channel}`);
+    }
+  } else if (lastOutboundTime) {
+    parts.push(`Outreach sent ${formatRelativeTime(lastOutboundTime)}`);
+  } else {
+    const createdTime = contact?.createdAt || contact?.created_at;
+    if (createdTime) {
+      parts.push(`Added ${formatRelativeTime(createdTime)} · Not contacted yet`);
+    } else {
+      parts.push('Not contacted yet');
+    }
+  }
+
+  // 3. Active request snippet if available
+  if (activeRequest && activeRequest.title) {
+    parts.push(`Request: ${activeRequest.title}`);
+  }
+
+  return parts.join(' · ');
+}
+
+function resolveDeliveryStatus(contact, messages = [], customerWindow = null) {
+  const hasInbound = messages.some(m => m.direction === 'inbound' || m.sender_type === 'contact') || 
+                     Boolean(customerWindow && customerWindow.hasReplied) || 
+                     Boolean(contact && (contact.lastInboundAt || contact.last_inbound_at));
   if (hasInbound) {
     return { label: 'Replied', bg: '#DCFCE7', color: '#15803D' };
   }
@@ -121,19 +195,75 @@ function resolveContactStatus(contact, messages = [], customerWindow = null) {
     if (status === 'read') return { label: 'Read', bg: '#ECFDF5', color: '#047857' };
     if (status === 'delivered') return { label: 'Delivered', bg: '#EFF6FF', color: '#1D4ED8' };
     if (status === 'failed') return { label: 'Failed', bg: '#FEE2E2', color: '#991B1B' };
-    if (status === 'sent') return { label: 'Sent', bg: '#F4F3EF', color: '#6E6A62' };
+    if (status === 'queued' || status === 'claimed' || status === 'dispatch_requested') return { label: 'Queued', bg: '#FEF3C7', color: '#92400E' };
+    if (status === 'sent') return { label: 'Sent', bg: '#F4F3EF', color: '#4B5563' };
   }
 
-  if (contact && contact.status) {
-    const s = contact.status.toLowerCase();
-    if (s === 'lead') return { label: 'New', bg: '#F4F3EF', color: '#6E6A62' };
-    return { label: contact.status.replace(/_/g, ' '), bg: '#F4F3EF', color: '#171717' };
+  if (contact && (contact.deliveryStatus || contact.delivery_status)) {
+    const st = (contact.deliveryStatus || contact.delivery_status).toLowerCase();
+    if (st === 'read') return { label: 'Read', bg: '#ECFDF5', color: '#047857' };
+    if (st === 'delivered') return { label: 'Delivered', bg: '#EFF6FF', color: '#1D4ED8' };
+    if (st === 'failed') return { label: 'Failed', bg: '#FEE2E2', color: '#991B1B' };
+    if (st === 'queued') return { label: 'Queued', bg: '#FEF3C7', color: '#92400E' };
+    if (st === 'sent') return { label: 'Sent', bg: '#F4F3EF', color: '#4B5563' };
+    if (st === 'replied') return { label: 'Replied', bg: '#DCFCE7', color: '#15803D' };
   }
 
-  return { label: 'New', bg: '#F4F3EF', color: '#6E6A62' };
+  if (contact && (contact.lastOutboundAt || contact.last_outbound_at)) {
+    return { label: 'Sent', bg: '#F4F3EF', color: '#4B5563' };
+  }
+
+  return { label: 'Not Contacted', bg: '#F4F3EF', color: '#6E6A62' };
 }
 
-function renderBanner(c, messages = [], customerWindow = null) {
+function resolveActionStatus(contact, messages = [], requests = []) {
+  const outboundMsgs = messages.filter(m => m.direction === 'outbound' || !m.direction);
+  const latestMsg = outboundMsgs.length > 0 ? outboundMsgs[outboundMsgs.length - 1] : null;
+  const rawDeliveryStatus = (latestMsg?.delivery_status || contact?.deliveryStatus || contact?.delivery_status || '').toLowerCase();
+
+  const nowTime = Date.now();
+  const fortyEightHoursAgo = new Date(nowTime - 48 * 3600 * 1000).toISOString();
+
+  const activeRequest = (requests || []).find(r => r.status !== 'completed' && r.status !== 'cancelled');
+  const isWaitingOnMe = activeRequest?.status === "waiting_on_me";
+  const hasFailedMsg = rawDeliveryStatus === "failed";
+  const hasUnread = (contact?.unreadCount || contact?.unread_count || 0) > 0;
+
+  const rawAction = contact?.actionStatus || contact?.action_status;
+  if (rawAction) {
+    const s = rawAction.toLowerCase();
+    if (s === 'needs_attention') return { label: 'Needs Attention', bg: '#FEF2F2', color: '#DC2626' };
+    if (s === 'needs_follow_up') return { label: 'Needs Follow-Up', bg: '#FFF7ED', color: '#EA580C' };
+    if (s === 'waiting_on_them') return { label: 'Waiting on Them', bg: '#EFF6FF', color: '#2563EB' };
+    if (s === 'recently_replied') return { label: 'Recently Replied', bg: '#ECFDF5', color: '#059669' };
+    if (s === 'completed') return { label: 'Completed', bg: '#F1F5F9', color: '#475569' };
+    if (s === 'idle') return { label: 'Idle', bg: '#F4F3EF', color: '#6E6A62' };
+  }
+
+  if (isWaitingOnMe || hasFailedMsg || hasUnread) {
+    return { label: 'Needs Attention', bg: '#FEF2F2', color: '#DC2626' };
+  }
+  if (activeRequest?.status === "needs_follow_up") {
+    return { label: 'Needs Follow-Up', bg: '#FFF7ED', color: '#EA580C' };
+  }
+  const lastInbound = contact?.lastInboundAt || contact?.last_inbound_at;
+  if (lastInbound && lastInbound >= fortyEightHoursAgo) {
+    return { label: 'Recently Replied', bg: '#ECFDF5', color: '#059669' };
+  }
+  if (activeRequest?.status === "waiting_on_them" || outboundMsgs.length > 0 || contact?.lastOutboundAt || contact?.last_outbound_at) {
+    return { label: 'Waiting on Them', bg: '#EFF6FF', color: '#2563EB' };
+  }
+  if (activeRequest?.status === "completed" || (requests.length > 0 && requests.every(r => r.status === 'completed'))) {
+    return { label: 'Completed', bg: '#F1F5F9', color: '#475569' };
+  }
+  return { label: 'Idle', bg: '#F4F3EF', color: '#6E6A62' };
+}
+
+function resolveContactStatus(contact, messages = [], customerWindow = null, requests = []) {
+  return resolveActionStatus(contact, messages, requests);
+}
+
+function renderBanner(c, messages = [], customerWindow = null, requests = []) {
   if (el("contactAvatar")) el("contactAvatar").textContent = getInitials(c.name || c.contact_person);
   if (el("clientName")) el("clientName").textContent = c.name || c.contact_person || "Unnamed Target";
   const rawPhone = c.phoneNumber || c.phone_number || c.phone;
@@ -149,12 +279,54 @@ function renderBanner(c, messages = [], customerWindow = null) {
     el("clientEmail").style.display = cleanEmail ? "inline" : "none";
   }
 
+  // Delivery status badge
+  const deliveryBadge = el("clientDeliveryBadge");
+  if (deliveryBadge) {
+    const delivery = resolveDeliveryStatus(c, messages, customerWindow);
+    deliveryBadge.textContent = delivery.label;
+    deliveryBadge.style.background = delivery.bg;
+    deliveryBadge.style.color = delivery.color;
+  }
+
+  // Action status badge
   const statusBadge = el("clientStatusBadge");
   if (statusBadge) {
-    const resolved = resolveContactStatus(c, messages, customerWindow);
-    statusBadge.textContent = resolved.label;
-    statusBadge.style.background = resolved.bg;
-    statusBadge.style.color = resolved.color;
+    const action = resolveActionStatus(c, messages, requests);
+    statusBadge.textContent = action.label;
+    statusBadge.style.background = action.bg;
+    statusBadge.style.color = action.color;
+  }
+
+  // Populate Contact Details modal fields
+  if (el("modalContactName")) el("modalContactName").textContent = c.name || c.contact_person || "Unnamed Target";
+  if (el("modalContactPhone")) el("modalContactPhone").textContent = cleanPhone || "—";
+  if (el("modalContactEmail")) el("modalContactEmail").textContent = cleanEmail || "—";
+  if (el("modalContactCompany")) {
+    if (c.company) {
+      el("modalContactCompany").textContent = c.company;
+      if (el("modalCompanyRow")) el("modalCompanyRow").style.display = "block";
+    } else {
+      if (el("modalCompanyRow")) el("modalCompanyRow").style.display = "none";
+    }
+  }
+  if (el("modalContactNotes")) {
+    if (c.notes) {
+      el("modalContactNotes").textContent = c.notes;
+      if (el("modalNotesRow")) el("modalNotesRow").style.display = "block";
+    } else {
+      if (el("modalNotesRow")) el("modalNotesRow").style.display = "none";
+    }
+  }
+
+  // Populate Contextual line in contact header
+  const contextLineEl = el("contactContextLine");
+  const contextDotEl = el("contactContextDot");
+  if (contextLineEl) {
+    const contextText = buildContactContextLine(c, messages, requests);
+    contextLineEl.textContent = contextText || "—";
+    if (contextDotEl) {
+      contextDotEl.style.display = contextText ? "inline" : "none";
+    }
   }
 }
 
@@ -487,14 +659,312 @@ async function addNote() {
   }
 }
 
+function openContactDetailsModal() {
+  const backdrop = el("contactDetailsModalBackdrop");
+  if (backdrop) backdrop.hidden = false;
+}
+
+function closeContactDetailsModal() {
+  const backdrop = el("contactDetailsModalBackdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+function copyContactField(elementId, btn) {
+  const target = el(elementId);
+  if (!target) return;
+  const text = target.textContent.trim();
+  if (!text || text === "—") return;
+
+  const finish = () => {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = "Copied!";
+      btn.style.color = "#15803D";
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.style.color = "#6E6A62";
+      }, 1500);
+    }
+  };
+
+  if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(finish).catch(() => {
+      fallbackCopy(text, finish);
+    });
+  } else {
+    fallbackCopy(text, finish);
+  }
+}
+
+function fallbackCopy(text, cb) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (cb) cb();
+  } catch (_) {}
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getFirstName(fullName) {
+  if (!fullName) return 'Contact';
+  const clean = fullName.trim().split(/\s+/)[0];
+  return clean || 'Contact';
+}
+
+function formatShortDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const day = d.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[d.getMonth()]}`;
+}
+
+function renderNextAction(c, messages = [], requests = [], activities = []) {
+  const container = el("nextActionContent");
+  const badge = el("nextActionBadge");
+  if (!container) return;
+
+  const targetName = c?.name || c?.contact_person || "Target";
+  const firstName = getFirstName(targetName);
+
+  const inboundMsgs = messages.filter(m => m.direction === 'inbound' || m.sender_type === 'contact');
+  const outboundMsgs = messages.filter(m => m.direction === 'outbound' || !m.direction);
+  const latestInbound = inboundMsgs.length > 0 ? inboundMsgs[inboundMsgs.length - 1] : null;
+  const latestOutbound = outboundMsgs.length > 0 ? outboundMsgs[outboundMsgs.length - 1] : null;
+
+  const lastInboundTime = latestInbound?.created_at || c?.lastInboundAt || c?.last_inbound_at;
+  const lastOutboundTime = latestOutbound?.created_at || c?.lastOutboundAt || c?.last_outbound_at;
+
+  const rescheduleAct = (activities || []).find(a => a.activity_type === 'followup_rescheduled');
+
+  // STATE 1: Inbound received and needs reply
+  if (lastInboundTime && (!lastOutboundTime || new Date(lastInboundTime) >= new Date(lastOutboundTime))) {
+    if (badge) {
+      badge.textContent = "Action required";
+      badge.style.background = "#DCFCE7";
+      badge.style.color = "#15803D";
+    }
+    const relTime = formatRelativeTime(lastInboundTime);
+    container.innerHTML = `
+      <h2 style="font-size: 20px; font-weight: 700; color: #171717; margin: 4px 0 8px 0; line-height: 1.3;">Reply to ${escapeHtml(firstName)}.</h2>
+      <div style="font-size: 13px; color: #6E6A62; margin-bottom: 20px;">
+        Received · ${relTime}
+      </div>
+      <div>
+        <button type="button" onclick="focusComposer('reply')" style="padding: 10px 22px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#333333'" onmouseout="this.style.background='#171717'">Reply</button>
+      </div>
+    `;
+    return;
+  }
+
+  // STATE 2: Outbound message sent (Waiting / Follow-up)
+  if (latestOutbound) {
+    const isFailed = (latestOutbound.delivery_status || '').toLowerCase() === 'failed';
+    if (isFailed) {
+      if (badge) {
+        badge.textContent = "Delivery Failed";
+        badge.style.background = "#FEE2E2";
+        badge.style.color = "#991B1B";
+      }
+      container.innerHTML = `
+        <h2 style="font-size: 20px; font-weight: 700; color: #DC2626; margin: 4px 0 8px 0; line-height: 1.3;">Outreach delivery failed.</h2>
+        <p style="font-size: 14px; color: #6E6A62; margin: 0 0 20px 0; line-height: 1.5;">Message could not be delivered to the target. Check phone number or retry.</p>
+        <div>
+          <button type="button" onclick="focusComposer('retry')" style="padding: 10px 22px; background: #DC2626; color: #ffffff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">Retry send</button>
+        </div>
+      `;
+      return;
+    }
+
+    if (badge) {
+      badge.textContent = "Waiting on them";
+      badge.style.background = "#EFF6FF";
+      badge.style.color = "#1D4ED8";
+    }
+
+    const sentDate = new Date(lastOutboundTime || latestOutbound.created_at);
+    const now = new Date();
+    const diffHours = (now - sentDate) / (3600 * 1000);
+    const diffDays = Math.floor(diffHours / 24);
+
+    let followUpHeadline = "Follow up in 2 days.";
+    if (rescheduleAct) {
+      followUpHeadline = "Follow up scheduled.";
+    } else if (diffDays >= 2) {
+      followUpHeadline = "Follow up now.";
+    } else if (diffDays === 1) {
+      followUpHeadline = "Follow up in 1 day.";
+    }
+
+    const rawMsg = latestOutbound.content || (latestOutbound.template_id ? `Outreach template: ${latestOutbound.template_id}` : "Outreach message");
+    const quoteText = rawMsg.length > 90 ? rawMsg.slice(0, 90) + "..." : rawMsg;
+    const sentDateStr = formatShortDate(sentDate);
+
+    container.innerHTML = `
+      <h2 style="font-size: 20px; font-weight: 700; color: #171717; margin: 4px 0 14px 0; line-height: 1.3;">${escapeHtml(followUpHeadline)}</h2>
+      
+      <div style="background: #FAF9F6; border: 1px solid #ECE8DF; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
+        <div style="font-size: 12px; font-weight: 600; color: #6E6A62; margin-bottom: 6px;">Last message</div>
+        <div style="font-size: 14px; color: #171717; line-height: 1.5; font-style: italic; margin-bottom: 8px;">"${escapeHtml(quoteText)}"</div>
+        <div style="font-size: 12px; color: #9CA3AF;">Sent · ${sentDateStr}</div>
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button type="button" onclick="focusComposer('follow_up')" style="padding: 10px 18px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#333333'" onmouseout="this.style.background='#171717'">Follow up now</button>
+        <button type="button" onclick="openRescheduleModal()" style="padding: 10px 18px; background: #ffffff; border: 1px solid #ECE8DF; color: #171717; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#F8F7F4'" onmouseout="this.style.background='#ffffff'">Reschedule</button>
+      </div>
+    `;
+    return;
+  }
+
+  // STATE 3: No outreach yet
+  if (badge) {
+    badge.textContent = "New Target";
+    badge.style.background = "#F4F3EF";
+    badge.style.color = "#6E6A62";
+  }
+
+  container.innerHTML = `
+    <h2 style="font-size: 20px; font-weight: 700; color: #171717; margin: 4px 0 8px 0; line-height: 1.3;">No outreach yet.</h2>
+    <p style="font-size: 14px; color: #6E6A62; margin: 0 0 20px 0; line-height: 1.5;">Send the first message to start the conversation.</p>
+    <div>
+      <button type="button" onclick="focusComposer('new_outreach')" style="padding: 10px 22px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#333333'" onmouseout="this.style.background='#171717'">Send message</button>
+    </div>
+  `;
+}
+
+function focusComposer(mode) {
+  const input = el("composerInput");
+  const templateSelect = el("templateSelect");
+
+  if (mode === 'reply') {
+    if (templateSelect && !templateSelect.disabled) {
+      templateSelect.value = "freeform";
+    }
+    if (input) input.placeholder = "Type your reply...";
+  } else if (mode === 'follow_up') {
+    if (templateSelect) {
+      templateSelect.value = "new_convo_1";
+    }
+    if (input) input.placeholder = "Follow-up message / template...";
+  } else if (mode === 'new_outreach' || mode === 'retry') {
+    if (templateSelect) {
+      templateSelect.value = "new_convo_1";
+    }
+    if (input) input.placeholder = "Template message will be sent...";
+  }
+
+  if (input) {
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus();
+    input.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.25)";
+    input.style.borderColor = "#2563EB";
+    setTimeout(() => {
+      input.style.boxShadow = "none";
+      input.style.borderColor = "#ECE8DF";
+    }, 1500);
+  }
+}
+
+function openRescheduleModal() {
+  const backdrop = el("rescheduleModalBackdrop");
+  if (backdrop) backdrop.hidden = false;
+}
+
+function closeRescheduleModal() {
+  const backdrop = el("rescheduleModalBackdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+async function submitReschedule(days) {
+  const contactId = getContactIdFromUrl();
+  const targetDate = new Date(Date.now() + days * 24 * 3600 * 1000);
+  const formattedDate = formatShortDate(targetDate);
+
+  try {
+    await authFetch("/api/activities", {
+      method: "POST",
+      body: JSON.stringify({
+        contact_id: contactId,
+        activity_type: "followup_rescheduled",
+        title: "Follow-up Rescheduled",
+        description: `Follow-up postponed by ${days} day(s) to ${formattedDate}.`,
+      }),
+    });
+    closeRescheduleModal();
+    await loadContactWorkspace();
+  } catch (err) {
+    alert("Failed to reschedule: " + err.message);
+  }
+}
+
 if (typeof window !== "undefined") {
   window.sendMessage = sendMessage;
   window.onChannelChange = onChannelChange;
   window.addNote = addNote;
   window.toggleItem = toggleItem;
+  window.resolveDeliveryStatus = resolveDeliveryStatus;
+  window.resolveActionStatus = resolveActionStatus;
+  window.resolveContactStatus = resolveContactStatus;
+  window.renderBanner = renderBanner;
+  window.openContactDetailsModal = openContactDetailsModal;
+  window.closeContactDetailsModal = closeContactDetailsModal;
+  window.copyContactField = copyContactField;
+  window.formatRelativeTime = formatRelativeTime;
+  window.buildContactContextLine = buildContactContextLine;
+  window.renderNextAction = renderNextAction;
+  window.focusComposer = focusComposer;
+  window.openRescheduleModal = openRescheduleModal;
+  window.closeRescheduleModal = closeRescheduleModal;
+  window.submitReschedule = submitReschedule;
+  window.formatShortDate = formatShortDate;
+  window.getFirstName = getFirstName;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   loadContactWorkspace();
+
+  const detailsBackdrop = el("contactDetailsModalBackdrop");
+  if (detailsBackdrop) {
+    detailsBackdrop.addEventListener("click", (e) => {
+      if (e.target === detailsBackdrop) closeContactDetailsModal();
+    });
+  }
+
+  const reqBackdrop = el("requestModalBackdrop");
+  if (reqBackdrop) {
+    reqBackdrop.addEventListener("click", (e) => {
+      if (e.target === reqBackdrop) closeAddRequestModal();
+    });
+  }
+
+  const reschedBackdrop = el("rescheduleModalBackdrop");
+  if (reschedBackdrop) {
+    reschedBackdrop.addEventListener("click", (e) => {
+      if (e.target === reschedBackdrop) closeRescheduleModal();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeContactDetailsModal();
+      closeAddRequestModal();
+      closeRescheduleModal();
+    }
+  });
 });
 

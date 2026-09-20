@@ -13,13 +13,13 @@ Collectrr is a serverless, edge-deployed **Personal CRM for keeping work moving 
 2. **Generic Requests**: Instead of vertical-specific loan/CA cases, Collectrr manages generic `requests` and `request_items` (e.g. "Send signed contract", "Upload PAN & GST", "Confirm time for Friday").
 3. **Decoupled Work State vs Transport Telemetry (Split Columns)**:
    - **Action Status**: `Needs Attention` | `Needs Follow-Up` | `Waiting on Them` | `Recently Replied` | `Completed` | `Idle`
-   - **Delivery Status**: `Replied` | `Read` | `Delivered` | `Sent` | `Queued` | `Failed` | `Pending`
+   - **Delivery Status**: `Replied` | `Read` | `Delivered` | `Sent` | `Queued` | `Failed` | `Not Contacted`
 4. **Attention-Centric Triage**: The dashboard triages contacts by actionability:
    - **Needs Attention**: `waiting_on_me` request, failed outbound message, or unread inbound reply.
    - **Needs Follow-Up**: request in `needs_follow_up` state.
    - **Waiting on Them**: request in `waiting_on_them` state or outbound message sent.
    - **Recently Replied**: Inbound response received in the last 48 hours.
-   - **Split Table Presentation**: Main table renders dedicated `Delivery` and `Action Status` columns to eliminate ambiguity between communication delivery and workflow next steps.
+   - **Split Table & Workspace Presentation**: Main table and contact workspace header render dedicated `Delivery` and `Action Status` badges to eliminate ambiguity between communication delivery and workflow next steps (no legacy `New` fallbacks). The contact detail header features a dynamic contextual line (e.g. company, latest interaction, relative time, and active request) paired with the "View contact details" modal link.
 
 ---
 
@@ -109,7 +109,7 @@ Lekho-Edge/
     ├── public/                        # Frontend Web Applications
     │   ├── index.html                 # Marketing landing page
     │   ├── dashboard.html             # Attention triage & contacts dashboard (/dashboard or /app)
-    │   ├── case.html                  # Contact workspace, 2-way chat stream, requests & activity feed
+    │   ├── case.html                  # Contact workspace (Conversation + Activity & Notes, Next Action recommendation card)
     │   ├── upload.html                # Client upload session portal
     │   ├── login.html, register.html, forgot-password.html # User authentication views
     │   ├── css/                       # Stylesheets (dashboard.css, case.css, tokens.css)
@@ -130,6 +130,7 @@ Lekho-Edge/
         ├── magic-link.test.js
         ├── dom-integration.test.js
         ├── frontend-syntax.test.js
+        ├── case-detail-status.test.js
         └── bulk-import.test.js
 ```
 
