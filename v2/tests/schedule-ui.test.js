@@ -55,8 +55,14 @@ test('Scheduling UI & Bulk Import Scheduling Architecture Tests', async (t) => {
           return { rows: c ? [c] : [] };
         }
         if (norm.startsWith('INSERT INTO contacts')) {
-          const [id, user_id, contact_person, phone_number, email] = args;
-          records.contacts.push({ id, user_id, contact_person, phone_number, email: email || null });
+          let id, user_id, contact_person, name, phone_number, email;
+          if (args.length >= 6) {
+            [id, user_id, contact_person, name, phone_number, email] = args;
+          } else {
+            [id, user_id, contact_person, phone_number, email] = args;
+            name = contact_person;
+          }
+          records.contacts.push({ id, user_id, contact_person, name, phone_number, email: email || null });
           return { rows: [] };
         }
         if (norm.startsWith('INSERT INTO loan_cases')) {

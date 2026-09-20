@@ -313,8 +313,14 @@ Amit Kumar,9899999999,,whatsapp,`;
             return { rows: c ? [{ id: c.id }] : [] };
           }
           if (norm.startsWith('INSERT INTO contacts')) {
-            const [id, user_id, contact_person, phone_number] = args;
-            records.contacts.push({ id, user_id, contact_person, phone_number });
+            let id, user_id, contact_person, name, phone_number;
+            if (args.length >= 5) {
+              [id, user_id, contact_person, name, phone_number] = args;
+            } else {
+              [id, user_id, contact_person, phone_number] = args;
+              name = contact_person;
+            }
+            records.contacts.push({ id, user_id, contact_person, name, phone_number });
             return { rows: [] };
           }
           if (norm.includes('FROM loan_cases WHERE user_id = ? AND phone_number = ? AND status NOT IN (\'closed\', \'completed\')')) {
