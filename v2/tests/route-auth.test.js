@@ -174,4 +174,23 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
     const body = await res.json();
     assert.ok(body.error);
   });
+
+  await t.test("9. Analytics & Observability pages return 200 HTML without 404", async () => {
+    const resAnalytics = await app.request("https://collectrr.workers.dev/admin/analytics", { method: "GET" }, env);
+    assert.equal(resAnalytics.status, 200);
+    const htmlAnalytics = await resAnalytics.text();
+    assert.ok(htmlAnalytics.includes("Platform Analytics"));
+
+    const resObservability = await app.request("https://collectrr.workers.dev/observability", { method: "GET" }, env);
+    assert.equal(resObservability.status, 200);
+    const htmlObservability = await resObservability.text();
+    assert.ok(htmlObservability.includes("System Observability"));
+
+    const resDd = await app.request("https://collectrr.workers.dev/dd", { method: "GET" }, env);
+    assert.equal(resDd.status, 200);
+
+    const resAdmin = await app.request("https://collectrr.workers.dev/admin", { method: "GET" }, env);
+    assert.equal(resAdmin.status, 302); // Redirects to /admin/analytics
+  });
 });
+

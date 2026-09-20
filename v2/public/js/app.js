@@ -76,6 +76,11 @@ function renderUserProfileBadge(user) {
       .toUpperCase();
     userAvatarEl.textContent = initials || username.slice(0, 2).toUpperCase();
   }
+
+  const navAnalytics = el("navAnalytics");
+  const navObservability = el("navObservability");
+  if (navAnalytics) navAnalytics.style.display = (role === "admin") ? "inline-block" : "none";
+  if (navObservability) navObservability.style.display = (role === "admin") ? "inline-block" : "none";
 }
 
 function toggleUserDropdown(event) {

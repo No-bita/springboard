@@ -44,6 +44,7 @@ import {
 import {
   handleGetAdminAnalyticsData,
   handleGetAdminAnalyticsDashboard,
+  handleGetAdminDashboard,
   handleGetAdminFailures,
   handleDeleteAdminFailure,
   handleClearAllFailures,
@@ -67,10 +68,16 @@ app.use("*", corsMiddleware);
 app.post("/api/auth/login", handleLogin);
 app.post("/api/auth/register", handleRegister);
 
-// Application Redirects
+// Application Pages & Redirects
 app.get("/app", (c) => c.redirect("/dashboard.html"));
 app.get("/dashboard", (c) => c.redirect("/dashboard.html"));
 app.get("/early-access", (c) => c.redirect("/register.html"));
+app.get("/admin", (c) => c.redirect("/admin/analytics"));
+app.get("/admin/analytics", handleGetAdminAnalyticsDashboard);
+app.get("/analytics", handleGetAdminAnalyticsDashboard);
+app.get("/admin/observability", handleGetAdminDashboard);
+app.get("/observability", handleGetAdminDashboard);
+app.get("/dd", handleGetAdminDashboard);
 
 // Health Check API
 app.get("/api/health", (c) => c.text("Collectr Personal CRM API Running"));
@@ -135,10 +142,11 @@ app.get("/api/user/credits", handleGetCredits);
 app.post("/api/user/recharge", handleRechargeCredits);
 app.post("/api/admin/credits/adjust", handleAdminAdjustCredits);
 
-// Admin Analytics Endpoints
+// Admin Analytics & Observability Endpoints
 app.get("/api/admin/analytics", handleGetAdminAnalyticsData);
 app.get("/api/admin/analytics/dashboard", handleGetAdminAnalyticsDashboard);
 app.get("/api/admin/failures", handleGetAdminFailures);
+app.delete("/api/admin/failures", handleClearAllFailures);
 app.delete("/api/admin/failures/:id", handleDeleteAdminFailure);
 app.post("/api/admin/failures/clear", handleClearAllFailures);
 
