@@ -172,12 +172,16 @@ test('Contact Sub-Page Delivery & Action Status Pill Tests', async (t) => {
   await t.test('7. buildContactContextLine generates concise contextual lines and populates contactContextLine', () => {
     const contactA = {
       name: 'Rohan Verma',
-      company: 'Acme Corp',
-      createdAt: new Date(Date.now() - 3600 * 1000).toISOString()
+      company: 'Acme Corp'
     };
     const ctxA = buildContactContextLine(contactA, [], []);
-    assert.ok(ctxA.includes('Acme Corp'));
-    assert.ok(ctxA.includes('Added 1h ago'));
+    assert.strictEqual(ctxA, 'Acme Corp');
+
+    const contactEmpty = {
+      name: 'Priya Sharma'
+    };
+    const ctxEmpty = buildContactContextLine(contactEmpty, [], []);
+    assert.strictEqual(ctxEmpty, '');
 
     const contactB = {
       name: 'Suresh Kumar',

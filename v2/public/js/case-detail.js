@@ -162,13 +162,6 @@ function buildContactContextLine(contact, messages = [], requests = []) {
     }
   } else if (lastOutboundTime) {
     parts.push(`Outreach sent ${formatRelativeTime(lastOutboundTime)}`);
-  } else {
-    const createdTime = contact?.createdAt || contact?.created_at;
-    if (createdTime) {
-      parts.push(`Added ${formatRelativeTime(createdTime)} · Not contacted yet`);
-    } else {
-      parts.push('Not contacted yet');
-    }
   }
 
   // 3. Active request snippet if available
@@ -314,7 +307,8 @@ function renderBanner(c, messages = [], customerWindow = null, requests = []) {
   const contextDotEl = el("contactContextDot");
   if (contextLineEl) {
     const contextText = buildContactContextLine(c, messages, requests);
-    contextLineEl.textContent = contextText || "—";
+    contextLineEl.textContent = contextText || "";
+    contextLineEl.style.display = contextText ? "inline" : "none";
     if (contextDotEl) {
       contextDotEl.style.display = contextText ? "inline" : "none";
     }
