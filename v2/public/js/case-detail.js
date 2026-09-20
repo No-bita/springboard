@@ -270,15 +270,6 @@ function renderBanner(c, messages = [], customerWindow = null, requests = []) {
   const cleanPhone = sanitizePhone(rawPhone);
   const cleanEmail = sanitizeEmail(c.email);
 
-  if (el("clientPhone")) {
-    el("clientPhone").textContent = cleanPhone || (cleanEmail ? "" : "—");
-    el("clientPhone").style.display = cleanPhone ? "inline" : (cleanEmail ? "none" : "inline");
-  }
-  if (el("clientEmail")) {
-    el("clientEmail").textContent = cleanEmail ? (cleanPhone ? `· ${cleanEmail}` : cleanEmail) : "";
-    el("clientEmail").style.display = cleanEmail ? "inline" : "none";
-  }
-
   // Delivery status badge
   const deliveryBadge = el("clientDeliveryBadge");
   if (deliveryBadge) {
