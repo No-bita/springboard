@@ -124,7 +124,7 @@
 
       <div id="errorAlert" class="error-alert" hidden></div>
 
-      <form id="loginForm">
+      <form id="loginForm" onsubmit="event.preventDefault();">
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" id="username" class="input-field" placeholder="Enter your username" required autofocus />
@@ -159,7 +159,7 @@
         togglePasswordBtn.textContent = isPassword ? 'Hide' : 'Show';
       };
 
-      form.onsubmit = async (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         errBox.hidden = true;
         submitBtn.disabled = true;
