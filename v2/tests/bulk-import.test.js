@@ -80,39 +80,106 @@ Invalid Contact,12345,invalid@example.com`;
     assert.ok(jsContent.includes('function parseCsvContacts'), 'parseCsvContacts must be defined in app.js');
     assert.ok(jsContent.includes('Channel, Template') || jsContent.includes('channel') && jsContent.includes('template'), 'Channel and template must be handled');
 
-    // Extract and test parseCsvContacts logic directly
+    // Extract and test parseCsvContacts logic directly matching updated app.js
+    function splitCsvLine(line) {
+      if (!line) return [];
+      let delimiter = ",";
+      if (!line.includes(",") && line.includes("\t")) {
+        delimiter = "\t";
+      } else if (!line.includes(",") && line.includes(";")) {
+        delimiter = ";";
+      }
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      let quoteChar = '"';
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        if ((char === '"' || char === "'") && !inQuotes) {
+          inQuotes = true;
+          quoteChar = char;
+        } else if (char === quoteChar && inQuotes) {
+          if (nextChar === quoteChar) {
+            current += quoteChar;
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else if (char === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result.map((p) => p.replace(/^["']|["']$/g, "").trim());
+    }
+
+    function isPhoneToken(token) {
+      if (!token) return false;
+      const digits = token.replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 15;
+    }
+
+    function isEmailToken(token) {
+      if (!token) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token.trim());
+    }
+
     function testParseCsv(content) {
-      const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (!content || !content.trim()) return [];
+      const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       if (lines.length === 0) return [];
       let startIndex = 0;
       let headerMap = null;
-      const firstParts = lines[0].split(",").map(p => p.trim().replace(/^["']|["']$/g, "").toLowerCase());
-      const hasHeader = firstParts.some(p => 
-        p.includes("name") || p.includes("phone") || p.includes("mobile") || p.includes("email") || p.includes("channel") || p.includes("template")
+      const firstParts = splitCsvLine(lines[0]).map((p) => p.toLowerCase());
+      const hasHeader = firstParts.some((p) =>
+        p.includes("name") ||
+        p.includes("phone") ||
+        p.includes("mobile") ||
+        p.includes("email") ||
+        p.includes("channel") ||
+        p.includes("template") ||
+        p.includes("target") ||
+        p.includes("fname") ||
+        p.includes("lname")
       );
       if (hasHeader) {
         startIndex = 1;
         headerMap = {};
         firstParts.forEach((col, idx) => {
-          if (col.includes("name") || col.includes("target")) headerMap.name = idx;
-          else if (col.includes("phone") || col.includes("mobile")) headerMap.phone = idx;
-          else if (col.includes("email")) headerMap.email = idx;
+          if (col.includes("first") || col.includes("fname") || col.includes("given")) headerMap.firstName = idx;
+          else if (col.includes("last") || col.includes("lname") || col.includes("surname") || col.includes("family")) headerMap.lastName = idx;
+          else if (col.includes("name") || col.includes("target") || col.includes("person") || col.includes("contact")) headerMap.name = idx;
+          else if (col.includes("phone") || col.includes("mobile") || col.includes("tel") || col.includes("cell") || col.includes("whatsapp")) headerMap.phone = idx;
+          else if (col.includes("email") || col.includes("mail")) headerMap.email = idx;
           else if (col.includes("channel")) headerMap.channel = idx;
           else if (col.includes("template") || col.includes("message")) headerMap.template = idx;
         });
       }
       const results = [];
       for (let i = startIndex; i < lines.length; i++) {
-        const parts = lines[i].split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
+        const rawLine = lines[i];
+        if (!rawLine) continue;
+        const parts = splitCsvLine(rawLine);
+        if (parts.length === 0 || parts.every((p) => !p)) continue;
         let name = "";
         let phone = "";
         let email = null;
         let channel = "whatsapp";
         let template = null;
-        if (headerMap) {
-          name = headerMap.name !== undefined ? parts[headerMap.name] || "" : parts[0] || "";
-          phone = headerMap.phone !== undefined ? parts[headerMap.phone] || "" : parts[1] || "";
-          email = headerMap.email !== undefined && parts[headerMap.email] ? parts[headerMap.email] : null;
+        if (headerMap && (headerMap.phone !== undefined || headerMap.name !== undefined || headerMap.firstName !== undefined)) {
+          if (headerMap.firstName !== undefined && headerMap.lastName !== undefined) {
+            const fn = parts[headerMap.firstName] || "";
+            const ln = parts[headerMap.lastName] || "";
+            name = [fn, ln].filter(Boolean).join(" ");
+          } else if (headerMap.name !== undefined) {
+            name = parts[headerMap.name] || "";
+          }
+          if (headerMap.phone !== undefined) phone = parts[headerMap.phone] || "";
+          if (headerMap.email !== undefined && parts[headerMap.email]) email = parts[headerMap.email];
           if (headerMap.channel !== undefined && parts[headerMap.channel]) {
             channel = parts[headerMap.channel].toLowerCase() === "email" ? "email" : "whatsapp";
           }
@@ -120,16 +187,47 @@ Invalid Contact,12345,invalid@example.com`;
             const tplVal = parts[headerMap.template].trim();
             template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
           }
-        } else {
-          name = parts[0] || "";
-          phone = parts[1] || "";
-          email = parts[2] || null;
-          if (parts[3]) channel = parts[3].toLowerCase() === "email" ? "email" : "whatsapp";
-          if (parts[4]) {
-            const tplVal = parts[4].trim();
-            template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
+        }
+        if (!phone || !isPhoneToken(phone)) {
+          let detectedPhone = "";
+          let detectedEmail = null;
+          let detectedChannel = null;
+          let detectedTemplate = null;
+          const nameParts = [];
+          for (let pIdx = 0; pIdx < parts.length; pIdx++) {
+            const token = parts[pIdx];
+            if (!token) continue;
+            if (!detectedPhone && isPhoneToken(token)) {
+              detectedPhone = token;
+            } else if (!detectedEmail && isEmailToken(token)) {
+              detectedEmail = token;
+            } else if (!detectedChannel && (token.toLowerCase() === "whatsapp" || token.toLowerCase() === "email")) {
+              detectedChannel = token.toLowerCase();
+            } else if (!detectedTemplate && (pIdx >= 3 && !token.includes(" "))) {
+              detectedTemplate = (token.toLowerCase() !== "none") ? token : null;
+            } else {
+              nameParts.push(token);
+            }
+          }
+          if (detectedPhone) {
+            phone = detectedPhone;
+            if (!name && nameParts.length > 0) name = nameParts.join(" ");
+            if (!email && detectedEmail) email = detectedEmail;
+            if (detectedChannel) channel = detectedChannel;
+            if (!template && detectedTemplate) template = detectedTemplate;
+          } else {
+            if (!name && nameParts.length > 0) name = nameParts.join(" ");
+            else if (!name) name = parts[0] || "";
+            const digits0 = (parts[0] || "").replace(/\D/g, "");
+            const digits1 = (parts[1] || "").replace(/\D/g, "");
+            if (digits1.length >= 7) phone = parts[1];
+            else if (digits0.length >= 7) {
+              phone = parts[0];
+              if (parts[1] && name === parts[0]) name = parts[1];
+            }
           }
         }
+        name = name.trim().replace(/^,+|,+$/g, "").trim();
         if (name && phone) results.push({ name, phone, email, channel, template });
       }
       return results;
@@ -153,6 +251,29 @@ Amit Kumar,9899999999,,whatsapp,`;
     assert.equal(parsedWithHeaders[2].name, "Amit Kumar");
     assert.equal(parsedWithHeaders[2].template, null, "Empty template must result in null (no message)");
     assert.equal(parsedWithHeaders[2].email, null);
+
+    // Test "shah, aaryan" edge cases
+    const quotedNameCsv = `"Shah, Aaryan", 9876543210, aaryan@example.com`;
+    const parsedQuoted = testParseCsv(quotedNameCsv);
+    assert.equal(parsedQuoted.length, 1);
+    assert.equal(parsedQuoted[0].name, "Shah, Aaryan");
+    assert.equal(parsedQuoted[0].phone, "9876543210");
+
+    const splitNameCsv = `Shah, Aaryan, 9876543210`;
+    const parsedSplit = testParseCsv(splitNameCsv);
+    assert.equal(parsedSplit.length, 1);
+    assert.equal(parsedSplit[0].name, "Shah Aaryan");
+    assert.equal(parsedSplit[0].phone, "9876543210");
+
+    const headerFirstLastCsv = `First Name, Last Name, Phone Number\nAaryan, Shah, 9876543210`;
+    const parsedFirstLast = testParseCsv(headerFirstLastCsv);
+    assert.equal(parsedFirstLast.length, 1);
+    assert.equal(parsedFirstLast[0].name, "Aaryan Shah");
+    assert.equal(parsedFirstLast[0].phone, "9876543210");
+
+    const noPhoneOnlyNames = `shah, aaryan`;
+    const parsedNoPhone = testParseCsv(noPhoneOnlyNames);
+    assert.equal(parsedNoPhone.length, 0, "Row without phone number must not parse 'aaryan' as a phone number");
   });
 
   await t.test('4. Backend API Route & Handler in cases.js & index.js', () => {

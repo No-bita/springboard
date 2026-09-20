@@ -635,30 +635,91 @@ async function handleContactSubmit(e) {
 }
 
 // ----------------------------------------------------
+// ----------------------------------------------------
 // BULK CSV IMPORT (NAME, MOBILE NUMBER, EMAIL, CHANNEL, TEMPLATE)
 // ----------------------------------------------------
 let parsedCsvContacts = [];
 
+function splitCsvLine(line) {
+  if (!line) return [];
+  let delimiter = ",";
+  if (!line.includes(",") && line.includes("\t")) {
+    delimiter = "\t";
+  } else if (!line.includes(",") && line.includes(";")) {
+    delimiter = ";";
+  }
+
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+  let quoteChar = '"';
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if ((char === '"' || char === "'") && !inQuotes) {
+      inQuotes = true;
+      quoteChar = char;
+    } else if (char === quoteChar && inQuotes) {
+      if (nextChar === quoteChar) {
+        current += quoteChar;
+        i++;
+      } else {
+        inQuotes = false;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result.map((p) => p.replace(/^["']|["']$/g, "").trim());
+}
+
+function isPhoneToken(token) {
+  if (!token) return false;
+  const digits = token.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function isEmailToken(token) {
+  if (!token) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token.trim());
+}
+
 function parseCsvContacts(content) {
   if (!content || !content.trim()) return [];
-  const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
 
   let startIndex = 0;
   let headerMap = null;
 
-  const firstParts = lines[0].split(",").map(p => p.trim().replace(/^["']|["']$/g, "").toLowerCase());
-  const hasHeader = firstParts.some(p => 
-    p.includes("name") || p.includes("phone") || p.includes("mobile") || p.includes("email") || p.includes("channel") || p.includes("template")
+  const firstParts = splitCsvLine(lines[0]).map((p) => p.toLowerCase());
+  const hasHeader = firstParts.some((p) =>
+    p.includes("name") ||
+    p.includes("phone") ||
+    p.includes("mobile") ||
+    p.includes("email") ||
+    p.includes("channel") ||
+    p.includes("template") ||
+    p.includes("target") ||
+    p.includes("fname") ||
+    p.includes("lname")
   );
 
   if (hasHeader) {
     startIndex = 1;
     headerMap = {};
     firstParts.forEach((col, idx) => {
-      if (col.includes("name") || col.includes("target")) headerMap.name = idx;
-      else if (col.includes("phone") || col.includes("mobile")) headerMap.phone = idx;
-      else if (col.includes("email")) headerMap.email = idx;
+      if (col.includes("first") || col.includes("fname") || col.includes("given")) headerMap.firstName = idx;
+      else if (col.includes("last") || col.includes("lname") || col.includes("surname") || col.includes("family")) headerMap.lastName = idx;
+      else if (col.includes("name") || col.includes("target") || col.includes("person") || col.includes("contact")) headerMap.name = idx;
+      else if (col.includes("phone") || col.includes("mobile") || col.includes("tel") || col.includes("cell") || col.includes("whatsapp")) headerMap.phone = idx;
+      else if (col.includes("email") || col.includes("mail")) headerMap.email = idx;
       else if (col.includes("channel")) headerMap.channel = idx;
       else if (col.includes("template") || col.includes("message")) headerMap.template = idx;
     });
@@ -666,17 +727,32 @@ function parseCsvContacts(content) {
 
   const results = [];
   for (let i = startIndex; i < lines.length; i++) {
-    const parts = lines[i].split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
+    const rawLine = lines[i];
+    if (!rawLine) continue;
+    const parts = splitCsvLine(rawLine);
+    if (parts.length === 0 || parts.every((p) => !p)) continue;
+
     let name = "";
     let phone = "";
     let email = null;
     let channel = "whatsapp";
     let template = null;
 
-    if (headerMap) {
-      name = headerMap.name !== undefined ? parts[headerMap.name] || "" : parts[0] || "";
-      phone = headerMap.phone !== undefined ? parts[headerMap.phone] || "" : parts[1] || "";
-      email = headerMap.email !== undefined && parts[headerMap.email] ? parts[headerMap.email] : null;
+    if (headerMap && (headerMap.phone !== undefined || headerMap.name !== undefined || headerMap.firstName !== undefined)) {
+      if (headerMap.firstName !== undefined && headerMap.lastName !== undefined) {
+        const fn = parts[headerMap.firstName] || "";
+        const ln = parts[headerMap.lastName] || "";
+        name = [fn, ln].filter(Boolean).join(" ");
+      } else if (headerMap.name !== undefined) {
+        name = parts[headerMap.name] || "";
+      }
+
+      if (headerMap.phone !== undefined) {
+        phone = parts[headerMap.phone] || "";
+      }
+      if (headerMap.email !== undefined && parts[headerMap.email]) {
+        email = parts[headerMap.email];
+      }
       if (headerMap.channel !== undefined && parts[headerMap.channel]) {
         channel = parts[headerMap.channel].toLowerCase() === "email" ? "email" : "whatsapp";
       }
@@ -684,18 +760,65 @@ function parseCsvContacts(content) {
         const tplVal = parts[headerMap.template].trim();
         template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
       }
-    } else {
-      name = parts[0] || "";
-      phone = parts[1] || "";
-      email = parts[2] || null;
-      if (parts[3]) {
-        channel = parts[3].toLowerCase() === "email" ? "email" : "whatsapp";
+    }
+
+    // Smart fallback if header was missing, or if mapped fields did not find a valid phone
+    if (!phone || !isPhoneToken(phone)) {
+      let detectedPhone = "";
+      let detectedEmail = null;
+      let detectedChannel = null;
+      let detectedTemplate = null;
+      const nameParts = [];
+
+      for (let pIdx = 0; pIdx < parts.length; pIdx++) {
+        const token = parts[pIdx];
+        if (!token) continue;
+
+        if (!detectedPhone && isPhoneToken(token)) {
+          detectedPhone = token;
+        } else if (!detectedEmail && isEmailToken(token)) {
+          detectedEmail = token;
+        } else if (!detectedChannel && (token.toLowerCase() === "whatsapp" || token.toLowerCase() === "email")) {
+          detectedChannel = token.toLowerCase();
+        } else if (!detectedTemplate && (pIdx >= 3 && !token.includes(" "))) {
+          detectedTemplate = (token.toLowerCase() !== "none") ? token : null;
+        } else {
+          nameParts.push(token);
+        }
       }
-      if (parts[4]) {
-        const tplVal = parts[4].trim();
-        template = (tplVal && tplVal.toLowerCase() !== "none") ? tplVal : null;
+
+      if (detectedPhone) {
+        phone = detectedPhone;
+        if (!name && nameParts.length > 0) {
+          name = nameParts.join(" ");
+        }
+        if (!email && detectedEmail) {
+          email = detectedEmail;
+        }
+        if (detectedChannel) {
+          channel = detectedChannel;
+        }
+        if (!template && detectedTemplate) {
+          template = detectedTemplate;
+        }
+      } else {
+        if (!name && nameParts.length > 0) {
+          name = nameParts.join(" ");
+        } else if (!name) {
+          name = parts[0] || "";
+        }
+        const digits0 = (parts[0] || "").replace(/\D/g, "");
+        const digits1 = (parts[1] || "").replace(/\D/g, "");
+        if (digits1.length >= 7) {
+          phone = parts[1];
+        } else if (digits0.length >= 7) {
+          phone = parts[0];
+          if (parts[1] && name === parts[0]) name = parts[1];
+        }
       }
     }
+
+    name = name.trim().replace(/^,+|,+$/g, "").trim();
 
     if (name && phone) {
       results.push({ name, phone, email, channel, template });
@@ -703,6 +826,29 @@ function parseCsvContacts(content) {
   }
 
   return results;
+}
+
+function renderCsvPreview(contacts) {
+  const box = el("bulkCsvPreviewBox");
+  const tbody = el("bulkCsvPreviewBody");
+  if (!box || !tbody) return;
+
+  if (!contacts || contacts.length === 0) {
+    box.style.display = "none";
+    tbody.innerHTML = "";
+    return;
+  }
+
+  box.style.display = "block";
+  tbody.innerHTML = contacts.slice(0, 10).map((c) => `
+    <tr style="border-bottom: 1px solid #F4F3EF;">
+      <td style="padding: 6px 10px; font-weight: 500; color: #171717;">${escapeHtml(c.name)}</td>
+      <td style="padding: 6px 10px; color: #525252; font-family: monospace;">${escapeHtml(c.phone)}</td>
+      <td style="padding: 6px 10px; color: #6E6A62;">${escapeHtml(c.email || '—')}</td>
+      <td style="padding: 6px 10px; color: #6E6A62; text-transform: capitalize;">${escapeHtml(c.channel || 'whatsapp')}</td>
+      <td style="padding: 6px 10px; color: #6E6A62;">${escapeHtml(c.template || 'None')}</td>
+    </tr>
+  `).join("") + (contacts.length > 10 ? `<tr><td colspan="5" style="padding: 6px 10px; text-align: center; color: #6E6A62; font-style: italic;">...and ${contacts.length - 10} more targets</td></tr>` : "");
 }
 
 function handleCsvFileSelect(event) {
@@ -724,9 +870,12 @@ function processCsvFile(file) {
 
     parsedCsvContacts = parseCsvContacts(content);
     if (parsedCsvContacts.length === 0) {
-      alert("The selected CSV file has no valid target rows (Name, Mobile Number).");
+      alert("The selected CSV file has no valid target rows with phone numbers (Name, Mobile Number).");
+      renderCsvPreview([]);
       return;
     }
+
+    renderCsvPreview(parsedCsvContacts);
 
     const promptEl = el("dropzonePrompt");
     const fileInfoEl = el("dropzoneFileInfo");
@@ -779,6 +928,9 @@ function openBulkImportModal() {
   if (fileInput) fileInput.value = "";
   const textarea = el("bulkCsvTextarea");
   if (textarea) textarea.value = "";
+
+  const previewBox = el("bulkCsvPreviewBox");
+  if (previewBox) previewBox.style.display = "none";
 
   const promptEl = el("dropzonePrompt");
   const fileInfoEl = el("dropzoneFileInfo");

@@ -289,6 +289,21 @@
             </div>
           </div>
 
+          <div id="bulkCsvPreviewBox" style="display: none; margin-top: 14px; border: 1px solid #ECE8DF; border-radius: 8px; max-height: 180px; overflow-y: auto;">
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr style="background: #FAF9F6; border-bottom: 1px solid #ECE8DF; color: #6E6A62;">
+                  <th style="padding: 6px 10px;">Name</th>
+                  <th style="padding: 6px 10px;">Phone</th>
+                  <th style="padding: 6px 10px;">Email</th>
+                  <th style="padding: 6px 10px;">Channel</th>
+                  <th style="padding: 6px 10px;">Template</th>
+                </tr>
+              </thead>
+              <tbody id="bulkCsvPreviewBody"></tbody>
+            </table>
+          </div>
+
           <div style="margin-top: 16px; padding: 14px 16px; background: #F8F7F4; border: 1px solid #ECE8DF; border-radius: 12px; font-size: 13px; color: #525252;">
             <div style="font-weight: 600; color: #171717; margin-bottom: 6px;">Expected CSV Format</div>
             <p style="margin: 0 0 8px 0; color: #6E6A62; line-height: 1.4;">Columns in order (header row optional). Set Template to <code>none</code> or leave blank to import without outreach:</p>
