@@ -280,6 +280,10 @@ function renderTable() {
 
     // Status / Triage category filter
     if (currentFilter === "all") return true;
+    if (currentFilter === "delivery_not_contacted") {
+      const isContacted = Boolean(rawDeliveryStatus === "replied" || rawDeliveryStatus === "read" || rawDeliveryStatus === "delivered" || rawDeliveryStatus === "sent" || rawDeliveryStatus === "failed" || rawDeliveryStatus === "queued" || c.lastInboundAt || c.last_inbound_at || c.lastOutboundAt || c.last_outbound_at);
+      return !isContacted;
+    }
     if (currentFilter.startsWith("delivery_")) {
       const targetDel = currentFilter.replace("delivery_", "");
       return (c.latest_delivery_status || c.delivery_status || c.latestMessage?.delivery_status || "").toLowerCase() === targetDel;
@@ -353,7 +357,7 @@ function renderTable() {
     } else if (rawDeliveryStatus === "queued" || rawDeliveryStatus === "claimed" || rawDeliveryStatus === "dispatch_requested") {
       deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEF3C7; color: #92400E;">Queued</span>`;
     } else {
-      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Pending</span>`;
+      deliveryBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Not Contacted</span>`;
     }
 
     // 2. Action Status Badge
