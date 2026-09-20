@@ -211,5 +211,54 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
     const resPage = await app.request("https://collectrr.workers.dev/forgot-password", { method: "GET" }, env);
     assert.equal(resPage.status, 302);
   });
+
+  await t.test("11. Case-insensitive login works with uppercase/lowercase credentials", async () => {
+    // Mock user registered as "ARVIND" with salt "lekho_salt_arvind"
+    const { hashPassword } = await import("../src/api/auth.js");
+    const testHash = await hashPassword("mySecret123", "lekho_salt_arvind");
+    const mockDbWithUser = {
+      prepare: (sql) => {
+        let bound = [];
+        return {
+          bind: (...args) => {
+            bound = args;
+            return {
+              all: async () => {
+                if (sql.includes("FROM users WHERE LOWER(username) = LOWER(?)")) {
+                  const queryU = bound[0];
+                  if (queryU && queryU.toLowerCase() === "arvind") {
+                    return { results: [{ id: "usr_arvind", username: "ARVIND", password_hash: testHash, role: "agent" }] };
+                  }
+                }
+                return { results: [] };
+              },
+              run: async () => ({ success: true })
+            };
+          }
+        };
+      }
+    };
+
+    const loginEnv = { ...env, DB: mockDbWithUser };
+
+    // Login with lowercase "arvind"
+    const resLower = await app.request("https://collectrr.workers.dev/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "arvind", password: "mySecret123" })
+    }, loginEnv);
+    assert.equal(resLower.status, 200);
+    const bodyLower = await resLower.json();
+    assert.ok(bodyLower.authHeader);
+
+    // Login with mixed case "ArVind"
+    const resMixed = await app.request("https://collectrr.workers.dev/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "ArVind", password: "mySecret123" })
+    }, loginEnv);
+    assert.equal(resMixed.status, 200);
+  });
 });
+
 

@@ -1,7 +1,7 @@
 import { sign } from "hono/jwt";
 import { getDbClient } from "../db/client.js";
 
-async function hashPassword(password, saltText) {
+export async function hashPassword(password, saltText) {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -90,7 +90,7 @@ export async function handleLogin(c) {
 
   try {
     const res = await db.execute({
-      sql: "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+      sql: "SELECT id, username, password_hash, role FROM users WHERE LOWER(username) = LOWER(?)",
       args: [u]
     });
 
