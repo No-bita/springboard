@@ -141,9 +141,9 @@
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <div style="position: relative;">
-            <input type="password" id="password" class="input-field" placeholder="Create a password (min 6 chars)" style="padding-right: 2.75rem;" required minlength="6" />
-            <button type="button" id="togglePasswordBtn" title="Toggle password visibility" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; font-weight: 500; padding: 0.2rem;">Show</button>
+          <div class="input-wrapper" style="position: relative;">
+            <input type="password" id="password" class="input-field" placeholder="Create a password (min 6 chars)" style="padding-right: 3.5rem;" required minlength="6" />
+            <button type="button" id="togglePasswordBtn" class="toggle-pwd-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: #F0EEEA; border: 1px solid #E2DED5; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; z-index: 10; user-select: none; line-height: 1.2;">Show</button>
           </div>
         </div>
         <button type="submit" class="btn-submit" id="submitBtn">Register</button>
@@ -161,13 +161,22 @@
       const passwordInput = document.getElementById('password');
       const togglePasswordBtn = document.getElementById('togglePasswordBtn');
 
-      togglePasswordBtn.onclick = () => {
-        const isPassword = passwordInput.type === 'password';
-        passwordInput.type = isPassword ? 'text' : 'password';
-        togglePasswordBtn.textContent = isPassword ? 'Hide' : 'Show';
-      };
+      if (togglePasswordBtn && passwordInput) {
+        const toggle = (e) => {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          const currentType = passwordInput.getAttribute('type') || 'password';
+          const nextType = currentType === 'password' ? 'text' : 'password';
+          passwordInput.setAttribute('type', nextType);
+          togglePasswordBtn.textContent = nextType === 'password' ? 'Show' : 'Hide';
+        };
+        togglePasswordBtn.addEventListener('click', toggle);
+        togglePasswordBtn.addEventListener('pointerdown', (e) => e.preventDefault());
+      }
 
-      form.onsubmit = async (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         errBox.hidden = true;
         successBox.hidden = true;
