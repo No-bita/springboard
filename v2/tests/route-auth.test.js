@@ -192,5 +192,24 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
     const resAdmin = await app.request("https://collectrr.workers.dev/admin", { method: "GET" }, env);
     assert.equal(resAdmin.status, 302); // Redirects to /admin/analytics
   });
+
+  await t.test("10. Reset Password API validates input & handles missing user gracefully", async () => {
+    const resShort = await app.request("https://collectrr.workers.dev/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "papajohn", newPassword: "123" })
+    }, env);
+    assert.equal(resShort.status, 400);
+
+    const resMissing = await app.request("https://collectrr.workers.dev/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "nonexistent_user", newPassword: "valid_password_123" })
+    }, env);
+    assert.equal(resMissing.status, 404);
+
+    const resPage = await app.request("https://collectrr.workers.dev/forgot-password", { method: "GET" }, env);
+    assert.equal(resPage.status, 302);
+  });
 });
 

@@ -132,3 +132,43 @@ export async function handleLogin(c) {
     return c.json({ error: "Authentication failed" }, 500);
   }
 }
+
+export async function handleResetPassword(c) {
+  const { username, newPassword } = await c.req.json().catch(() => ({}));
+  const u = String(username || "").trim();
+  const p = String(newPassword || "").trim();
+
+  if (!u || !p || p.length < 6) {
+    return c.json({ error: "Username and new password (min 6 characters) are required." }, 400);
+  }
+
+  const db = getDbClient(c.env);
+
+  try {
+    const res = await db.execute({
+      sql: "SELECT id, username FROM users WHERE LOWER(username) = LOWER(?)",
+      args: [u],
+    });
+
+    if (res.rows.length === 0) {
+      return c.json({ error: "No account found with that username." }, 404);
+    }
+
+    const user = res.rows[0];
+    const salt = "lekho_salt_" + user.username.toLowerCase();
+    const newHash = await hashPassword(p, salt);
+
+    await db.execute({
+      sql: "UPDATE users SET password_hash = ? WHERE id = ?",
+      args: [newHash, user.id],
+    });
+
+    return c.json({
+      success: true,
+      message: "Password reset successfully. You can now sign in with your new password.",
+    });
+  } catch (err) {
+    console.error("Reset Password Error:", err);
+    return c.json({ error: "Failed to reset password", details: err.message }, 500);
+  }
+}

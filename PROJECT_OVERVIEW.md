@@ -110,7 +110,7 @@ Lekho-Edge/
     │   ├── dashboard.html             # Attention triage & contacts dashboard (/dashboard or /app)
     │   ├── case.html                  # Contact workspace, 2-way chat stream, requests & activity feed
     │   ├── upload.html                # Client upload session portal
-    │   ├── login.html & register.html # User authentication views
+    │   ├── login.html, register.html, forgot-password.html # User authentication views
     │   ├── css/                       # Stylesheets (dashboard.css, case.css, tokens.css)
     │   └── js/                        # Frontend controllers (app.js, case-detail.js, auth.js)
     │

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import { handleLogin, handleRegister } from "./api/auth.js";
+import { handleLogin, handleRegister, handleResetPassword } from "./api/auth.js";
 import { handleWebhookVerify, handleWebhookEvent } from "./api/webhook.js";
 import {
   handleGetContacts,
@@ -67,11 +67,14 @@ app.use("*", corsMiddleware);
 // Auth API Endpoints
 app.post("/api/auth/login", handleLogin);
 app.post("/api/auth/register", handleRegister);
+app.post("/api/auth/reset-password", handleResetPassword);
+app.post("/api/auth/forgot-password", handleResetPassword);
 
 // Application Pages & Redirects
 app.get("/app", (c) => c.redirect("/dashboard.html"));
 app.get("/dashboard", (c) => c.redirect("/dashboard.html"));
 app.get("/early-access", (c) => c.redirect("/register.html"));
+app.get("/forgot-password", (c) => c.redirect("/forgot-password.html"));
 app.get("/admin", (c) => c.redirect("/admin/analytics"));
 app.get("/admin/analytics", handleGetAdminAnalyticsDashboard);
 app.get("/analytics", handleGetAdminAnalyticsDashboard);
