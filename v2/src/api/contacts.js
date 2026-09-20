@@ -99,6 +99,9 @@ export async function handleGetContacts(c) {
         latestMessage,
         activeRequest,
         activeRequestsCount: row.active_requests_count || 0,
+        delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (row.last_outbound_at ? "sent" : null)),
+        latest_delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (row.last_outbound_at ? "sent" : null)),
+        latest_message_content: latestMessage?.content || null
       };
 
       return contactObj;

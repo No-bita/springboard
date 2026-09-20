@@ -324,18 +324,24 @@ function renderTable() {
     const email = c.email || "";
 
     const latestMsg = c.latest_message_content || c.latest_message || "No messages sent yet.";
-    const deliveryStatus = (c.latest_delivery_status || c.delivery_status || "queued").toLowerCase();
+    const rawDeliveryStatus = (c.latest_delivery_status || c.delivery_status || c.latestMessage?.delivery_status || "").toLowerCase();
 
-    // Delivery Status Badge
-    let statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">${deliveryStatus}</span>`;
-    if (deliveryStatus === "delivered") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #EFF6FF; color: #1D4ED8;">Delivered</span>`;
-    } else if (deliveryStatus === "read") {
-      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #ECFDF5; color: #047857;">Read</span>`;
-    } else if (deliveryStatus === "replied") {
+    // Fixed Status Buckets: Replied, Read, Delivered, Sent, Failed, Queued (transitory), New
+    let statusBadge;
+    if (rawDeliveryStatus === "replied" || c.lastInboundAt || c.last_inbound_at) {
       statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #DCFCE7; color: #15803D;">Replied</span>`;
-    } else if (deliveryStatus === "failed") {
+    } else if (rawDeliveryStatus === "read") {
+      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #ECFDF5; color: #047857;">Read</span>`;
+    } else if (rawDeliveryStatus === "delivered") {
+      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #EFF6FF; color: #1D4ED8;">Delivered</span>`;
+    } else if (rawDeliveryStatus === "failed") {
       statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEE2E2; color: #991B1B;">Failed</span>`;
+    } else if (rawDeliveryStatus === "sent" || c.lastOutboundAt || c.last_outbound_at) {
+      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #4B5563;">Sent</span>`;
+    } else if (rawDeliveryStatus === "queued" || rawDeliveryStatus === "claimed" || rawDeliveryStatus === "dispatch_requested") {
+      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #FEF3C7; color: #92400E;">Queued</span>`;
+    } else {
+      statusBadge = `<span style="font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #F4F3EF; color: #6E6A62;">Pending</span>`;
     }
 
     const lastDate = c.last_interaction_at || c.last_updated || c.created_at;
@@ -886,7 +892,7 @@ function formatStatus(status) {
 
 function getDisplayStatus(contact, persona = 'crm') {
   if (persona === 'direct_outreach' || persona === 'crm') {
-    const raw = contact.latest_delivery_status || contact.delivery_status || contact.whatsappDeliveryStatus || contact.whatsapp_delivery_status;
+    const raw = contact.latest_delivery_status || contact.delivery_status || contact.latestMessage?.delivery_status || contact.whatsappDeliveryStatus || contact.whatsapp_delivery_status;
     return (raw || 'pending').toLowerCase();
   }
   return contact.status || 'lead';
