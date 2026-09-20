@@ -259,6 +259,103 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
     }, loginEnv);
     assert.equal(resMixed.status, 200);
   });
+
+  await t.test("12. Full end-to-end reset password lifecycle: reset updates hash and allows new login", async () => {
+    const { hashPassword } = await import("../src/api/auth.js");
+    let currentHash = await hashPassword("oldPassword123", "lekho_salt_papajohn");
+    
+    const mockDbLifecycle = {
+      prepare: (sql) => {
+        let bound = [];
+        return {
+          bind: (...args) => {
+            bound = args;
+            return {
+              all: async () => {
+                if (sql.includes("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                  currentHash = bound[0];
+                  return { results: [], meta: { changes: 1 } };
+                }
+                if (sql.includes("FROM users WHERE LOWER(username) = LOWER(?)")) {
+                  const queryU = bound[0];
+                  if (queryU && queryU.toLowerCase() === "papajohn") {
+                    return { results: [{ id: "usr_papajohn", username: "papajohn", password_hash: currentHash, role: "admin" }] };
+                  }
+                }
+                return { results: [] };
+              },
+              run: async () => {
+                if (sql.includes("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                  currentHash = bound[0];
+                  return { success: true, meta: { changes: 1 } };
+                }
+                return { success: true };
+              }
+            };
+          }
+        };
+      }
+    };
+
+    const lifecycleEnv = { ...env, DB: mockDbLifecycle };
+
+    // 1. Login with old password succeeds
+    const resInitial = await app.request("https://collectrr.workers.dev/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "papajohn", password: "oldPassword123" })
+    }, lifecycleEnv);
+    assert.equal(resInitial.status, 200);
+
+    // 2. Reset password to new password
+    const resReset = await app.request("https://collectrr.workers.dev/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "PapaJohn", newPassword: "brandNewPassword2026" })
+    }, lifecycleEnv);
+    assert.equal(resReset.status, 200);
+    const bodyReset = await resReset.json();
+    assert.ok(bodyReset.success);
+
+    // 3. Login with old password fails
+    const resOldFail = await app.request("https://collectrr.workers.dev/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "papajohn", password: "oldPassword123" })
+    }, lifecycleEnv);
+    assert.equal(resOldFail.status, 401);
+
+    // 4. Login with new password succeeds
+    const resNewSuccess = await app.request("https://collectrr.workers.dev/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "papajohn", password: "brandNewPassword2026" })
+    }, lifecycleEnv);
+    assert.equal(resNewSuccess.status, 200);
+    const bodyNew = await resNewSuccess.json();
+    assert.ok(bodyNew.authHeader);
+  });
+
+  await t.test("13. Auth HTML templates are CSP-compliant (no inline executable scripts or event attributes)", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const publicDir = path.join(process.cwd(), "public");
+
+    const authHtmlFiles = ["login.html", "register.html", "forgot-password.html"];
+    for (const filename of authHtmlFiles) {
+      const filePath = path.join(publicDir, filename);
+      const content = fs.readFileSync(filePath, "utf8");
+
+      // Verify no inline scripts (excluding external <script src="...">)
+      const inlineScriptMatch = content.match(/<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/i);
+      assert.equal(inlineScriptMatch, null, `${filename} contains inline <script> violating strict CSP`);
+
+      // Verify no inline event handlers (e.g. onsubmit=, onclick=)
+      const inlineHandlerMatch = content.match(/\son[a-z]+\s*=\s*["'][^"']*["']/i);
+      assert.equal(inlineHandlerMatch, null, `${filename} contains inline event handler violating strict CSP: ${inlineHandlerMatch?.[0]}`);
+    }
+  });
 });
+
 
 

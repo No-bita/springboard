@@ -112,7 +112,7 @@ Lekho-Edge/
     │   ├── upload.html                # Client upload session portal
     │   ├── login.html, register.html, forgot-password.html # User authentication views
     │   ├── css/                       # Stylesheets (dashboard.css, case.css, tokens.css)
-    │   └── js/                        # Frontend controllers (app.js, case-detail.js, auth.js)
+    │   └── js/                        # Frontend controllers (app.js, case-detail.js, login.js, register.js, forgot-password.js)
     │
     └── tests/                         # Node.js Test Suite (100% Offline Compatible)
         ├── contact-model.test.js
@@ -155,6 +155,21 @@ Supporting Ledgers:
 - credit_transactions: Append-only balance mutations
 ```
 
+### Core API Endpoints
+
+#### Authentication & User Management
+- `POST /api/auth/login`: Authenticates user (case-insensitive username lookup with PBKDF2/SHA-256 and salt `lekho_salt_${username.toLowerCase()}`).
+- `POST /api/auth/register`: Creates new user account with default starting credits.
+- `POST /api/auth/reset-password` (alias `POST /api/auth/forgot-password`): Updates user password hash securely.
+- `GET /api/user/profile`: Returns authenticated user details and current credit balance.
+
+#### Contacts & Outreach
+- `GET /api/contacts`: Returns filtered contacts list with latest message and active request summary.
+- `POST /api/contacts`: Creates new contact and initializes primary WhatsApp conversation channel.
+- `GET /api/contacts/:id`: Returns full contact workspace, conversation stream, and requests.
+- `PATCH /api/contacts/:id`: Updates contact fields.
+- `DELETE /api/contacts/:id`: Deletes contact and cascade removes associated records.
+
 ---
 
 ## 5. Deployment & Operational Standards
@@ -169,4 +184,5 @@ Run all verification tests without external network dependencies:
 ```bash
 npm --prefix v2 run test:offline
 ```
-All 133 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
+All 141 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
+
