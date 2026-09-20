@@ -458,9 +458,19 @@ function updateTemplatePreview() {
   const tplId = templateSelect.value;
 
   if (channelBadge) {
-    channelBadge.textContent = channel === "email" ? "Email" : "WhatsApp";
-    channelBadge.style.background = channel === "email" ? "#EFF6FF" : "#DCFCE7";
-    channelBadge.style.color = channel === "email" ? "#1E40AF" : "#166534";
+    if (channel === "both") {
+      channelBadge.textContent = "Both (WhatsApp + Email)";
+      channelBadge.style.background = "#F3E8FF";
+      channelBadge.style.color = "#6B21A8";
+    } else if (channel === "email") {
+      channelBadge.textContent = "Email";
+      channelBadge.style.background = "#EFF6FF";
+      channelBadge.style.color = "#1E40AF";
+    } else {
+      channelBadge.textContent = "WhatsApp";
+      channelBadge.style.background = "#DCFCE7";
+      channelBadge.style.color = "#166534";
+    }
   }
 
   if (tplId === "hello_world") {
@@ -480,15 +490,21 @@ function onChannelSelectChange() {
   const customOpt = el("optCustomText");
   if (!channelSelect || !templateSelect || !customOpt) return;
 
-  if (channelSelect.value === "whatsapp") {
+  if (channelSelect.value === "email") {
+    customOpt.disabled = false;
+    customOpt.textContent = "Custom Freeform Message (Email)";
+  } else if (channelSelect.value === "both") {
     customOpt.disabled = true;
     customOpt.textContent = "Custom Message (Requires approved Meta template for WhatsApp)";
     if (templateSelect.value === "custom_text") {
       templateSelect.value = "new_convo_1";
     }
   } else {
-    customOpt.disabled = false;
-    customOpt.textContent = "Custom Freeform Message (Email)";
+    customOpt.disabled = true;
+    customOpt.textContent = "Custom Message (Requires approved Meta template for WhatsApp)";
+    if (templateSelect.value === "custom_text") {
+      templateSelect.value = "new_convo_1";
+    }
   }
   onTemplateSelectChange();
 }
@@ -754,7 +770,8 @@ function parseCsvContacts(content) {
         email = parts[headerMap.email];
       }
       if (headerMap.channel !== undefined && parts[headerMap.channel]) {
-        channel = parts[headerMap.channel].toLowerCase() === "email" ? "email" : "whatsapp";
+        const ch = parts[headerMap.channel].toLowerCase();
+        channel = (ch === "email" || ch === "both") ? ch : "whatsapp";
       }
       if (headerMap.template !== undefined && parts[headerMap.template]) {
         const tplVal = parts[headerMap.template].trim();
@@ -778,7 +795,7 @@ function parseCsvContacts(content) {
           detectedPhone = token;
         } else if (!detectedEmail && isEmailToken(token)) {
           detectedEmail = token;
-        } else if (!detectedChannel && (token.toLowerCase() === "whatsapp" || token.toLowerCase() === "email")) {
+        } else if (!detectedChannel && (token.toLowerCase() === "whatsapp" || token.toLowerCase() === "email" || token.toLowerCase() === "both")) {
           detectedChannel = token.toLowerCase();
         } else if (!detectedTemplate && (pIdx >= 3 && !token.includes(" "))) {
           detectedTemplate = (token.toLowerCase() !== "none") ? token : null;

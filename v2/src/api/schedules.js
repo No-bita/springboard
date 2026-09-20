@@ -81,10 +81,10 @@ export async function handleCreateSchedule(c) {
     }
   }
 
-  if (outreachChannel === "whatsapp" && !canonicalPhone) {
+  if ((outreachChannel === "whatsapp" || outreachChannel === "both") && !canonicalPhone) {
     return c.json({ error: "Phone number is required for WhatsApp schedule." }, 400);
   }
-  if (outreachChannel === "email" && !recipientEmail && !email) {
+  if ((outreachChannel === "email" || outreachChannel === "both") && !recipientEmail && !email) {
     return c.json({ error: "Email address is required for email schedule." }, 400);
   }
 
@@ -109,50 +109,142 @@ export async function handleCreateSchedule(c) {
     recipientEmail: recipientEmail || email,
   };
 
-  const scheduleId = `sch_${crypto.randomUUID()}`;
-  const occurrenceId = `occ_${crypto.randomUUID()}`;
-  const occurrenceKey = `${scheduleId}_${scheduledForUtc}`;
+  let scheduleStatements = [];
+  let scheduleId = null;
+  let occurrenceId = null;
+  let occurrenceKey = null;
 
-  const scheduleStatements = [
-    {
-      sql: `
-        INSERT INTO schedules (
-          id, user_id, contact_id, request_id, channel, template_id, message_body,
-          payload_snapshot, schedule_type, recurrence_interval, timezone,
-          status, next_run_utc, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'one_off', null, ?, 'active', ?, datetime('now'))
-      `,
-      args: [
-        scheduleId,
-        userId,
-        targetContactId,
-        requestId,
-        outreachChannel,
-        resolvedTemplateId,
-        resolvedMessageBody,
-        JSON.stringify(payloadSnapshot),
-        safeTz,
-        scheduledForUtc,
-      ],
-    },
-    {
-      sql: `
-        INSERT INTO scheduled_occurrences (
-          id, schedule_id, occurrence_key, scheduled_for_utc, operational_status,
-          channel, recipient_phone, recipient_email, created_at
-        ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, datetime('now'))
-      `,
-      args: [
-        occurrenceId,
-        scheduleId,
-        occurrenceKey,
-        scheduledForUtc,
-        outreachChannel,
-        canonicalPhone,
-        recipientEmail || email,
-      ],
-    },
-  ];
+  if (outreachChannel === "both") {
+    const schWaId = `sch_wa_${crypto.randomUUID()}`;
+    const occWaId = `occ_${crypto.randomUUID()}`;
+    const occWaKey = `${schWaId}_${scheduledForUtc}`;
+
+    const schEmId = `sch_em_${crypto.randomUUID()}`;
+    const occEmId = `occ_${crypto.randomUUID()}`;
+    const occEmKey = `${schEmId}_${scheduledForUtc}`;
+
+    scheduleId = schWaId;
+    occurrenceId = occWaId;
+    occurrenceKey = occWaKey;
+
+    scheduleStatements = [
+      {
+        sql: `
+          INSERT INTO schedules (
+            id, user_id, contact_id, request_id, channel, template_id, message_body,
+            payload_snapshot, schedule_type, recurrence_interval, timezone,
+            status, next_run_utc, created_at
+          ) VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'one_off', null, ?, 'active', ?, datetime('now'))
+        `,
+        args: [
+          schWaId,
+          userId,
+          targetContactId,
+          requestId,
+          resolvedTemplateId,
+          resolvedMessageBody,
+          JSON.stringify({ ...payloadSnapshot, channel: "whatsapp" }),
+          safeTz,
+          scheduledForUtc,
+        ],
+      },
+      {
+        sql: `
+          INSERT INTO scheduled_occurrences (
+            id, schedule_id, occurrence_key, scheduled_for_utc, operational_status,
+            channel, recipient_phone, recipient_email, created_at
+          ) VALUES (?, ?, ?, ?, 'pending', 'whatsapp', ?, null, datetime('now'))
+        `,
+        args: [
+          occWaId,
+          schWaId,
+          occWaKey,
+          scheduledForUtc,
+          canonicalPhone,
+        ],
+      },
+      {
+        sql: `
+          INSERT INTO schedules (
+            id, user_id, contact_id, request_id, channel, template_id, message_body,
+            payload_snapshot, schedule_type, recurrence_interval, timezone,
+            status, next_run_utc, created_at
+          ) VALUES (?, ?, ?, ?, 'email', ?, ?, ?, 'one_off', null, ?, 'active', ?, datetime('now'))
+        `,
+        args: [
+          schEmId,
+          userId,
+          targetContactId,
+          requestId,
+          resolvedTemplateId,
+          resolvedMessageBody,
+          JSON.stringify({ ...payloadSnapshot, channel: "email" }),
+          safeTz,
+          scheduledForUtc,
+        ],
+      },
+      {
+        sql: `
+          INSERT INTO scheduled_occurrences (
+            id, schedule_id, occurrence_key, scheduled_for_utc, operational_status,
+            channel, recipient_phone, recipient_email, created_at
+          ) VALUES (?, ?, ?, ?, 'pending', 'email', null, ?, datetime('now'))
+        `,
+        args: [
+          occEmId,
+          schEmId,
+          occEmKey,
+          scheduledForUtc,
+          recipientEmail || email,
+        ],
+      },
+    ];
+  } else {
+    scheduleId = `sch_${crypto.randomUUID()}`;
+    occurrenceId = `occ_${crypto.randomUUID()}`;
+    occurrenceKey = `${scheduleId}_${scheduledForUtc}`;
+
+    scheduleStatements = [
+      {
+        sql: `
+          INSERT INTO schedules (
+            id, user_id, contact_id, request_id, channel, template_id, message_body,
+            payload_snapshot, schedule_type, recurrence_interval, timezone,
+            status, next_run_utc, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'one_off', null, ?, 'active', ?, datetime('now'))
+        `,
+        args: [
+          scheduleId,
+          userId,
+          targetContactId,
+          requestId,
+          outreachChannel,
+          resolvedTemplateId,
+          resolvedMessageBody,
+          JSON.stringify(payloadSnapshot),
+          safeTz,
+          scheduledForUtc,
+        ],
+      },
+      {
+        sql: `
+          INSERT INTO scheduled_occurrences (
+            id, schedule_id, occurrence_key, scheduled_for_utc, operational_status,
+            channel, recipient_phone, recipient_email, created_at
+          ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, datetime('now'))
+        `,
+        args: [
+          occurrenceId,
+          scheduleId,
+          occurrenceKey,
+          scheduledForUtc,
+          outreachChannel,
+          canonicalPhone,
+          recipientEmail || email,
+        ],
+      },
+    ];
+  }
 
   if (typeof db.batch === "function") {
     await db.batch(scheduleStatements);

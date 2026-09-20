@@ -258,6 +258,16 @@ export async function handleSendContactTemplate(c, passedBody = null) {
       args: [actId, userId, contactId, requestId, renderedBody, JSON.stringify({ template: templateIdentifier, provider_message_id: providerMsgId })],
     });
 
+    // If channel is 'both' and recipient email is present, dispatch email as well
+    if (body.channel === "both" && (contact.email || body.email)) {
+      await handleSendContactEmail(c, {
+        ...body,
+        templateId: templateIdentifier,
+        templateName: templateIdentifier,
+        templateParams,
+      }).catch((err) => console.warn("handleSendContactTemplate dual email dispatch failed:", err));
+    }
+
     return c.json({
       success: true,
       message: {
@@ -393,6 +403,18 @@ export async function handleSendMessage(c) {
 
   if (channel === "email") {
     return handleSendContactEmail(c, body);
+  }
+
+  if (channel === "both") {
+    const waRes = (body.template_id || body.templateId)
+      ? await handleSendContactTemplate(c, body)
+      : await handleSendContactText(c, body);
+
+    await handleSendContactEmail(c, body).catch((err) => {
+      console.warn("handleSendMessage dual dispatch email error:", err);
+    });
+
+    return waRes;
   }
 
   if (body.template_id || body.templateId) {

@@ -332,6 +332,18 @@ function onChannelChange() {
     if (input) {
       input.placeholder = "Type email message...";
     }
+  } else if (channel === "both") {
+    if (banner) banner.style.display = "none";
+    if (statusText) statusText.textContent = "WhatsApp + Email Outreach";
+    if (templateSelect) {
+      templateSelect.innerHTML = `
+        <option value="new_convo_1" selected>New Outreach Template (new_convo_1)</option>
+        <option value="hello_world">Meta Hello World (hello_world)</option>
+      `;
+    }
+    if (input) {
+      input.placeholder = "Template message will be sent across WhatsApp & Email...";
+    }
   } else {
     if (currentWindowStatus) {
       applyWindowStatus(currentWindowStatus);
