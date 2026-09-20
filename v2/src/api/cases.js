@@ -37,12 +37,12 @@ export async function ensureContact(db, userId, canonicalPhone, contactPerson, e
 
   const contactId = "cnt_" + crypto.randomUUID();
   await db.execute({
-    sql: `INSERT INTO contacts (id, user_id, contact_person, phone_number, email, created_at, last_updated)
+    sql: `INSERT INTO contacts (id, user_id, name, phone_number, email, created_at, last_updated)
           VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     args: [contactId, userId, contactPerson, canonicalPhone, email]
   }).catch(async () => {
     return db.execute({
-      sql: `INSERT INTO contacts (id, user_id, name, phone_number, email, created_at, last_updated)
+      sql: `INSERT INTO contacts (id, user_id, contact_person, phone_number, email, created_at, last_updated)
             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
       args: [contactId, userId, contactPerson, canonicalPhone, email]
     });
