@@ -41,6 +41,16 @@
         width: 100%;
         max-width: 440px;
         box-shadow: none;
+        transition: transform 150ms ease-out;
+      }
+      .login-card.shake {
+        animation: cardShake 350ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+      }
+      @keyframes cardShake {
+        10%, 90% { transform: translate3d(-2px, 0, 0); }
+        20%, 80% { transform: translate3d(4px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+        40%, 60% { transform: translate3d(4px, 0, 0); }
       }
       .brand-header {
         display: flex;
@@ -83,6 +93,15 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 3px var(--accent-ring);
       }
+      .input-field:disabled {
+        background: #F3F1EC;
+        color: #8C887F;
+        cursor: not-allowed;
+      }
+      .input-field.input-error {
+        border-color: #DC2626;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+      }
       .btn-submit {
         width: 100%;
         height: 44px;
@@ -94,23 +113,62 @@
         border: none;
         border-radius: 12px;
         cursor: pointer;
-        transition: background 150ms ease-out;
+        transition: background 150ms ease-out, transform 100ms ease-out;
         margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
       }
-      .btn-submit:hover { background: var(--btn-primary-hover); }
-      .error-alert {
-        background: #FEE2E2;
-        border: 1px solid #ECE8DF;
-        color: #D84A3A;
-        padding: 0.875rem;
+      .btn-submit:hover:not(:disabled) { background: var(--btn-primary-hover); }
+      .btn-submit:disabled {
+        opacity: 0.75;
+        cursor: not-allowed;
+      }
+      .btn-submit.btn-success {
+        background: #166534 !important;
+        color: #ffffff !important;
+      }
+      .alert-box {
+        padding: 0.875rem 1rem;
         border-radius: 10px;
         font-size: 13px;
         margin-bottom: 1.25rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        line-height: 1.4;
+        animation: fadeIn 180ms ease-out;
+      }
+      .error-alert {
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        color: #DC2626;
+      }
+      .success-alert {
+        background: #F0FDF4;
+        border: 1px solid #BBF7D0;
+        color: #166534;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #ffffff;
+        animation: spin 600ms linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
       }
     </style>
   </head>
   <body>
-    <div class="login-card">
+    <div class="login-card" id="cardContainer">
       <div style="text-align: center; margin-bottom: 1.5rem;">
         <a href="/" style="font-size: 13px; color: var(--muted); text-decoration: none;">← Back to Home</a>
       </div>
@@ -122,7 +180,8 @@
         </div>
       </div>
 
-      <div id="errorAlert" class="error-alert" hidden></div>
+      <div id="errorAlert" class="alert-box error-alert" style="display: none;"></div>
+      <div id="successAlert" class="alert-box success-alert" style="display: none;"></div>
 
       <form id="loginForm" onsubmit="event.preventDefault();">
         <div class="form-group">
@@ -139,7 +198,9 @@
             <button type="button" id="togglePasswordBtn" class="toggle-pwd-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: #F0EEEA; border: 1px solid #E2DED5; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; z-index: 10; user-select: none; line-height: 1.2;">Show</button>
           </div>
         </div>
-        <button type="submit" class="btn-submit" id="submitBtn">Sign In</button>
+        <button type="submit" class="btn-submit" id="submitBtn">
+          <span id="btnText">Sign In</span>
+        </button>
         <div style="text-align: center; margin-top: 1rem; font-size: 0.8125rem; color: var(--muted);">
           Don't have an account? <a href="/register.html" style="color: var(--accent); text-decoration: none; font-weight: 600;">Create one</a>
         </div>
@@ -148,8 +209,12 @@
 
     <script>
       const form = document.getElementById('loginForm');
+      const card = document.getElementById('cardContainer');
       const errBox = document.getElementById('errorAlert');
+      const successBox = document.getElementById('successAlert');
       const submitBtn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+      const usernameInput = document.getElementById('username');
       const passwordInput = document.getElementById('password');
       const togglePasswordBtn = document.getElementById('togglePasswordBtn');
 
@@ -168,40 +233,89 @@
         togglePasswordBtn.addEventListener('pointerdown', (e) => e.preventDefault());
       }
 
+      function showError(msg) {
+        errBox.textContent = msg;
+        errBox.style.display = 'flex';
+        successBox.style.display = 'none';
+        passwordInput.classList.add('input-error');
+        usernameInput.classList.add('input-error');
+        
+        // Trigger tactile shake effect on failure
+        card.classList.remove('shake');
+        void card.offsetWidth; // Force reflow
+        card.classList.add('shake');
+        
+        passwordInput.focus();
+        passwordInput.select();
+      }
+
+      function showSuccess(msg) {
+        successBox.textContent = msg;
+        successBox.style.display = 'flex';
+        errBox.style.display = 'none';
+        passwordInput.classList.remove('input-error');
+        usernameInput.classList.remove('input-error');
+        
+        usernameInput.disabled = true;
+        passwordInput.disabled = true;
+        submitBtn.className = 'btn-submit btn-success';
+        submitBtn.innerHTML = '<span>✓ Signed In!</span>';
+      }
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        errBox.hidden = true;
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Authenticating...';
+        errBox.style.display = 'none';
+        successBox.style.display = 'none';
+        passwordInput.classList.remove('input-error');
+        usernameInput.classList.remove('input-error');
 
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username || !password) {
+          showError('Please enter both your username and password.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<div class="spinner"></div><span>Signing In...</span>';
 
         try {
-          // Verify credentials against auth API endpoint
           const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
           });
 
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Invalid credentials');
+          let data = {};
+          try {
+            data = await res.json();
+          } catch {
+            data = { error: 'Invalid response received from server' };
+          }
 
-          // Store session token in localStorage & redirect to dashboard
+          if (!res.ok) {
+            throw new Error(data.error || 'Invalid username or password');
+          }
+
+          // Authoritative Success State
+          showSuccess('Sign in successful! Redirecting to dashboard...');
           localStorage.setItem('collectrr_auth', data.authHeader);
-          
+
           const params = new URLSearchParams(window.location.search);
           const redirectUrl = params.get('redirect') || '/dashboard.html';
-          window.location.href = redirectUrl;
+
+          setTimeout(() => {
+            window.location.href = redirectUrl;
+          }, 800);
+
         } catch (err) {
-          errBox.textContent = err.message;
-          errBox.hidden = false;
-        } finally {
+          showError(err.message || 'Authentication failed. Please check your credentials.');
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Sign In';
+          submitBtn.className = 'btn-submit';
+          submitBtn.innerHTML = '<span>Sign In</span>';
         }
-      };
+      });
     </script>
   </body>
 </html>
