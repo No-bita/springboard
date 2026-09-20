@@ -183,7 +183,7 @@
       <div id="errorAlert" class="alert-box error-alert" style="display: none;"></div>
       <div id="successAlert" class="alert-box success-alert" style="display: none;"></div>
 
-      <form id="loginForm" onsubmit="event.preventDefault();">
+      <form id="loginForm">
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" id="username" class="input-field" placeholder="Enter your username" required autofocus />
@@ -207,115 +207,6 @@
       </form>
     </div>
 
-    <script>
-      const form = document.getElementById('loginForm');
-      const card = document.getElementById('cardContainer');
-      const errBox = document.getElementById('errorAlert');
-      const successBox = document.getElementById('successAlert');
-      const submitBtn = document.getElementById('submitBtn');
-      const btnText = document.getElementById('btnText');
-      const usernameInput = document.getElementById('username');
-      const passwordInput = document.getElementById('password');
-      const togglePasswordBtn = document.getElementById('togglePasswordBtn');
-
-      if (togglePasswordBtn && passwordInput) {
-        const toggle = (e) => {
-          if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          const currentType = passwordInput.getAttribute('type') || 'password';
-          const nextType = currentType === 'password' ? 'text' : 'password';
-          passwordInput.setAttribute('type', nextType);
-          togglePasswordBtn.textContent = nextType === 'password' ? 'Show' : 'Hide';
-        };
-        togglePasswordBtn.addEventListener('click', toggle);
-        togglePasswordBtn.addEventListener('pointerdown', (e) => e.preventDefault());
-      }
-
-      function showError(msg) {
-        errBox.textContent = msg;
-        errBox.style.display = 'flex';
-        successBox.style.display = 'none';
-        passwordInput.classList.add('input-error');
-        usernameInput.classList.add('input-error');
-        
-        // Trigger tactile shake effect on failure
-        card.classList.remove('shake');
-        void card.offsetWidth; // Force reflow
-        card.classList.add('shake');
-        
-        passwordInput.focus();
-        passwordInput.select();
-      }
-
-      function showSuccess(msg) {
-        successBox.textContent = msg;
-        successBox.style.display = 'flex';
-        errBox.style.display = 'none';
-        passwordInput.classList.remove('input-error');
-        usernameInput.classList.remove('input-error');
-        
-        usernameInput.disabled = true;
-        passwordInput.disabled = true;
-        submitBtn.className = 'btn-submit btn-success';
-        submitBtn.innerHTML = '<span>✓ Signed In!</span>';
-      }
-
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        errBox.style.display = 'none';
-        successBox.style.display = 'none';
-        passwordInput.classList.remove('input-error');
-        usernameInput.classList.remove('input-error');
-
-        const username = usernameInput.value.trim();
-        const password = passwordInput.value;
-
-        if (!username || !password) {
-          showError('Please enter both your username and password.');
-          return;
-        }
-
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<div class="spinner"></div><span>Signing In...</span>';
-
-        try {
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-
-          let data = {};
-          try {
-            data = await res.json();
-          } catch {
-            data = { error: 'Invalid response received from server' };
-          }
-
-          if (!res.ok) {
-            throw new Error(data.error || 'Invalid username or password');
-          }
-
-          // Authoritative Success State
-          showSuccess('Sign in successful! Redirecting to dashboard...');
-          localStorage.setItem('collectrr_auth', data.authHeader);
-
-          const params = new URLSearchParams(window.location.search);
-          const redirectUrl = params.get('redirect') || '/dashboard.html';
-
-          setTimeout(() => {
-            window.location.href = redirectUrl;
-          }, 800);
-
-        } catch (err) {
-          showError(err.message || 'Authentication failed. Please check your credentials.');
-          submitBtn.disabled = false;
-          submitBtn.className = 'btn-submit';
-          submitBtn.innerHTML = '<span>Sign In</span>';
-        }
-      });
-    </script>
+    <script src="/js/login.js"></script>
   </body>
 </html>
