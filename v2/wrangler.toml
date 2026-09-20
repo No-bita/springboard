@@ -2,9 +2,11 @@ name = "collectrr-v2"
 compatibility_date = "2026-05-24"
 main = "src/index.js"
 
+workers_dev = true
+
 [vars]
 ENVIRONMENT = "production"
-FRONTEND_URL = "https://collectrr-v2.collectr.workers.dev"
+FRONTEND_URL = "https://springboard.aaryanshah.co.in"
 WHATSAPP_PROD_PHONE_ID = "1073272059211357"
 WHATSAPP_PHONE_ID = "1078210008704696"
 WHATSAPP_VERIFY_TOKEN = "CollectrWhatsappTokenAuth2026"
