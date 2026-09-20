@@ -68,7 +68,8 @@ Lekho-Edge/
     ├── wrangler.toml                  # Cloudflare Worker bindings
     │
     ├── migrations/                    # D1 Database Migrations
-    │   └── 0001_personal_crm_schema.sql
+    │   ├── 0001_personal_crm_schema.sql
+    │   └── 0002_campaigns_and_templates.sql
     │
     ├── src/                           # Backend Application Code
     │   ├── index.js                   # Worker entrypoint, router dispatcher & scheduled/queue handlers
@@ -82,9 +83,10 @@ Lekho-Edge/
     │   │   ├── requests.js            # Generic request lifecycle & checklist items
     │   │   ├── activities.js          # Activity logging and notes
     │   │   ├── schedules.js           # Schedule creation, listing, cancellation & retry
-    │   │   ├── templates.js           # Message template registry
+    │   │   ├── templates.js           # Full Template Manager (WhatsApp & Email template CRUD)
+    │   │   ├── campaigns.js           # Campaign creation, message linking, launch, schedule, cancel, telemetry
     │   │   ├── credits.js             # Financial ledger, recharge wallet, paise math
-    │   │   ├── webhook.js             # Meta WhatsApp webhook verification & event ingestion
+    │   │   ├── webhook.js             # Meta WhatsApp webhook verification & event ingestion + reply attribution
     │   │   ├── session.js             # Magic link token session validation
     │   │   ├── upload.js              # Presigned R2 uploads & direct uploads
     │   │   └── admin.js               # System observability & failure analytics
@@ -98,10 +100,10 @@ Lekho-Edge/
     │   │   ├── client.js              # Resend REST client with Idempotency-Key support & mock adapter
     │   │   ├── templates.js           # Responsive HTML & plain-text email renderer
     │   │   └── pipeline.js            # Authoritative email dispatch pipeline
-    │   ├── scheduler/                 # Asynchronous Scheduling Engine
+    │   ├── scheduler/                 # Asynchronous Scheduling & Campaign Queue Engine
     │   │   ├── time.js                # Timezone conversion preserving IANA wall-clock times
-    │   │   ├── scanner.js             # Cron scanner with 10-minute crash-window recovery leases
-    │   │   └── consumer.js            # Queue consumer with channel routing & JIT credit validation
+    │   │   ├── scanner.js             # Cron scanner for scheduled occurrences & due scheduled campaigns
+    │   │   └── consumer.js            # Queue consumer with campaign batching, direct messaging & credit isolation
     │   └── db/
     │       ├── client.js              # D1 client wrapper & compatibility driver
     │       └── schema.sql             # Canonical Personal CRM database schema
@@ -109,11 +111,13 @@ Lekho-Edge/
     ├── public/                        # Frontend Web Applications
     │   ├── index.html                 # Marketing landing page
     │   ├── dashboard.html             # Attention triage & contacts dashboard (/dashboard or /app)
+    │   ├── campaigns.html             # Outreach campaigns management, wizard, and real-time telemetry
+    │   ├── templates.html             # Message template management and device simulator
     │   ├── case.html                  # Contact workspace (Conversation + Activity & Notes, Next Action recommendation card)
     │   ├── upload.html                # Client upload session portal
     │   ├── login.html, register.html, forgot-password.html # User authentication views
     │   ├── css/                       # Stylesheets (dashboard.css, case.css, tokens.css)
-    │   └── js/                        # Frontend controllers (app.js, case-detail.js, login.js, register.js, forgot-password.js)
+    │   └── js/                        # Frontend controllers (app.js, campaigns.js, templates.js, case-detail.js, login.js, register.js, forgot-password.js)
     │
     └── tests/                         # Node.js Test Suite (100% Offline Compatible)
         ├── contact-model.test.js
@@ -124,6 +128,8 @@ Lekho-Edge/
         ├── schema-parity.test.js
         ├── status-filtering.test.js
         ├── templates-ui.test.js
+        ├── templates-crud.test.js
+        ├── campaigns-and-templates.test.js
         ├── route-auth.test.js
         ├── credits.test.js
         ├── email-outreach.test.js
@@ -141,17 +147,25 @@ Lekho-Edge/
 ### Core Relational Hierarchy
 ```text
 users
-  └── contacts (UNIQUE per user_id, phone_number)
-       ├── conversations (1 per contact per channel)
-       │    └── messages (2-way conversation history & delivery status)
-       ├── requests (Action items & tasks)
-       │    └── request_items (Checklist items)
-       ├── schedules (Automated recurring or one-off reminders)
-       │    └── scheduled_occurrences (Claimed & processed by Cloudflare Queue)
-       └── activities (Consolidated audit trail & internal notes)
+  ├── contacts (UNIQUE per user_id, phone_number)
+  │    ├── conversations (1 per contact per channel)
+  │    │    └── messages (2-way conversation history & delivery status)
+  │    ├── requests (Action items & tasks)
+  │    │    └── request_items (Checklist items)
+  │    ├── schedules (Automated recurring or one-off reminders)
+  │    │    └── scheduled_occurrences (Claimed & processed by Cloudflare Queue)
+  │    └── activities (Consolidated audit trail & internal notes)
+  │
+  ├── templates (Omnichannel outreach templates for WhatsApp & Email)
+  │    ├── whatsapp_template_configs (Category, language, header, body, footer, buttons)
+  │    └── email_template_configs (Subject, body_html, body_text)
+  │
+  └── campaigns (Outreach campaign definitions & state machines)
+       ├── campaign_messages (Template snapshots & step orders)
+       └── campaign_recipients (Immutable recipient snapshots, delivery & response telemetry)
 
 Supporting Ledgers:
-- message_templates: Registry of WhatsApp & Email templates
+- message_templates: Legacy fallback registry
 - whatsapp_messages: Meta Cloud API transport idempotency ledger
 - credit_reservations: JIT credit reserve/capture state machine
 - credit_transactions: Append-only balance mutations
@@ -160,10 +174,10 @@ Supporting Ledgers:
 ### Core API Endpoints
 
 #### Authentication & User Management
-- `POST /api/auth/login`: Authenticates user (case-insensitive username lookup with PBKDF2/SHA-256 and salt `lekho_salt_${username.toLowerCase()}`).
-- `POST /api/auth/register`: Creates new user account with default starting credits.
-- `POST /api/auth/reset-password` (alias `POST /api/auth/forgot-password`): Updates user password hash securely.
-- `GET /api/user/profile`: Returns authenticated user details and current credit balance.
+- `POST /api/auth/login`: Authenticates user.
+- `POST /api/auth/register`: Creates new user account.
+- `POST /api/auth/reset-password`: Updates user password hash securely.
+- `GET /api/user/profile`: Returns authenticated user details and workspace info.
 
 #### Contacts & Outreach
 - `GET /api/contacts`: Returns filtered contacts list with latest message and active request summary.
@@ -171,6 +185,23 @@ Supporting Ledgers:
 - `GET /api/contacts/:id`: Returns full contact workspace, conversation stream, and requests.
 - `PATCH /api/contacts/:id`: Updates contact fields.
 - `DELETE /api/contacts/:id`: Deletes contact and cascade removes associated records.
+
+#### Message Templates
+- `GET /api/templates`: Lists all system and custom templates (with WhatsApp and Email configs).
+- `POST /api/templates`: Creates a new custom template (channel: `whatsapp` or `email`).
+- `PUT /api/templates/:id`: Updates an existing custom template and auto-increments version.
+- `DELETE /api/templates/:id`: Soft-archives a custom template (`status = 'archived'`).
+
+#### Outreach Campaigns
+- `GET /api/campaigns`: Lists user campaigns with live telemetry metrics.
+- `POST /api/campaigns`: Creates a draft outreach campaign with audience filters.
+- `POST /api/campaigns/preview-audience`: Previews contact count matching audience filters.
+- `GET /api/campaigns/:id`: Returns full campaign details and telemetry progress.
+- `GET /api/campaigns/:id/recipients`: Returns immutable recipient delivery snapshots.
+- `POST /api/campaigns/:id/messages`: Configures outreach templates for the campaign.
+- `POST /api/campaigns/:id/launch`: Freezes immutable recipient snapshots and triggers immediate queue dispatch.
+- `POST /api/campaigns/:id/schedule`: Schedules campaign for automated scanner pickup.
+- `POST /api/campaigns/:id/cancel`: Cancels pending deliveries for scheduled or running campaigns.
 
 ---
 
@@ -186,5 +217,5 @@ Run all verification tests without external network dependencies:
 ```bash
 npm --prefix v2 run test:offline
 ```
-All 141 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
+All 174 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
 

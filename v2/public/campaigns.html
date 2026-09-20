@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campaigns — Collectrr</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .metric-card {
+      background: #ffffff;
+      border: 1px solid #ECE8DF;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #171717;
+    }
+    .metric-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #6E6A62;
+    }
+
+    .pill-btn {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid #ECE8DF;
+      background: #ffffff;
+      font-size: 13px;
+      font-weight: 500;
+      color: #6E6A62;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .pill-btn.active {
+      background: #171717;
+      color: #ffffff;
+      border-color: #171717;
+    }
+
+    .campaign-table-card {
+      background: #ffffff;
+      border: 1px solid #ECE8DF;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .campaign-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+    .campaign-table th {
+      background: #FAF9F6;
+      padding: 12px 16px;
+      font-weight: 600;
+      color: #6E6A62;
+      border-bottom: 1px solid #ECE8DF;
+    }
+    .campaign-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #F4F3EF;
+      color: #171717;
+      vertical-align: middle;
+    }
+    .campaign-table tr:last-child td {
+      border-bottom: none;
+    }
+    .campaign-table tr:hover td {
+      background: #FCFBF8;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .status-draft { background: #F4F3EF; color: #6E6A62; }
+    .status-scheduled { background: #FEF3C7; color: #92400E; }
+    .status-running { background: #DBEAFE; color: #1E40AF; }
+    .status-completed { background: #E6F4ED; color: #166534; }
+    .status-cancelled { background: #FEE2E2; color: #991B1B; }
+
+    .telemetry-bar-container {
+      width: 160px;
+      height: 8px;
+      background: #ECE8DF;
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+    }
+    .bar-sent { background: #3B82F6; }
+    .bar-delivered { background: #10B981; }
+    .bar-read { background: #059669; }
+    .bar-replied { background: #8B5CF6; }
+    .bar-failed { background: #EF4444; }
+
+    /* Modal styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 760px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      border: 1px solid #ECE8DF;
+      display: flex;
+      flex-direction: column;
+    }
+    .drawer-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(2px);
+      z-index: 1050;
+      justify-content: flex-end;
+    }
+    .drawer-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 900px;
+      height: 100%;
+      box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .form-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #171717;
+    }
+    .form-input, .form-textarea, .form-select {
+      padding: 9px 12px;
+      border: 1px solid #ECE8DF;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #171717;
+      background: #FCFBF8;
+      outline: none;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: #171717;
+      background: #ffffff;
+    }
+
+    .wizard-step {
+      display: none;
+    }
+    .wizard-step.active {
+      display: block;
+    }
+    .step-indicator {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #ECE8DF;
+      padding-bottom: 12px;
+    }
+    .step-dot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #8C877D;
+    }
+    .step-dot.active {
+      color: #171717;
+    }
+    .step-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ECE8DF;
+      color: #6E6A62;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+    .step-dot.active .step-num {
+      background: #171717;
+      color: #ffffff;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-layout">
+    <main class="main-content" style="width: 100%; max-width: 1440px; margin: 0 auto; padding: 32px 40px;">
+      
+      <!-- Top Navigation Bar -->
+      <nav class="top-nav-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: #ffffff; border: 1px solid #ECE8DF; margin-bottom: 24px; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 2rem;">
+          <a href="/dashboard" class="top-nav-brand" style="display: flex; align-items: center; gap: 0.625rem; text-decoration: none; cursor: pointer;">
+            <div class="brand-icon" style="width: 32px; height: 32px; background: #171717; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: 600; font-size: 1rem;">C</div>
+            <div class="brand-text">
+              <h2 style="font-size: 1.15rem; font-weight: 600; color: #171717; margin: 0;">Collectrr</h2>
+            </div>
+          </a>
+          
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <a href="/dashboard" style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 13px; font-weight: 500; color: #6E6A62; text-decoration: none; transition: background 0.15s;">Contacts</a>
+            <a href="/campaigns.html" style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 13px; font-weight: 600; color: #171717; background: #F4F3EF; text-decoration: none;">Campaigns</a>
+            <a href="/templates.html" style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 13px; font-weight: 500; color: #6E6A62; text-decoration: none; transition: background 0.15s;">Templates</a>
+          </div>
+        </div>
+
+        <div class="top-nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
+          <a href="/admin/analytics" id="navAnalytics" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 13px; color: #6E6A62; text-decoration: none;">Analytics</a>
+          <a href="/observability" id="navObservability" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 13px; color: #6E6A62; text-decoration: none;">Observability</a>
+
+          <div style="position: relative;">
+            <div class="sidebar-user" id="topUserContainer" onclick="toggleUserDropdown(event)" style="display: flex; align-items: center; gap: 0.625rem; padding: 0.35rem 0.875rem; background: #F4F3EF; border: 1px solid #ECE8DF; border-radius: 999px; cursor: pointer;">
+              <div class="user-avatar" id="userAvatar" style="width: 30px; height: 30px; font-size: 13px; background: #171717; color: #ffffff;">--</div>
+              <div class="user-info" style="line-height: 1.2;">
+                <div id="userName" style="font-size: 13px; font-weight: 600; color: #171717;">User</div>
+                <div id="userRole" style="font-size: 12px; color: #6E6A62;">Workspace</div>
+              </div>
+            </div>
+
+            <div id="userDropdownMenu" style="display: none; position: absolute; right: 0; top: calc(100% + 8px); background: #ffffff; border: 1px solid #ECE8DF; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); padding: 8px; min-width: 180px; z-index: 1000;">
+              <div style="padding: 8px 12px; border-bottom: 1px solid #F4F3EF; margin-bottom: 4px;">
+                <div id="dropdownUserName" style="font-size: 13px; font-weight: 600; color: #171717;">User</div>
+                <div id="dropdownUserRole" style="font-size: 12px; color: #6E6A62;">Workspace</div>
+              </div>
+              <button type="button" onclick="handleLogout()" style="width: 100%; text-align: left; padding: 8px 12px; border: none; background: transparent; font-size: 13px; color: #DC2626; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Page Header & Action CTA -->
+      <section style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+          <h1 style="font-size: 22px; font-weight: 600; color: #171717; margin: 0;">Outreach Campaigns</h1>
+        </div>
+        <div>
+          <button type="button" onclick="openCreateCampaignWizard()" class="btn-primary" style="background: #171717; color: #ffffff; padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <span>+ New Campaign</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Overview Metrics -->
+      <section class="metric-grid">
+        <div class="metric-card">
+          <span class="metric-label">Total Recipients Dispatched</span>
+          <span class="metric-value" id="metricTotalRecipients">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Active / Running</span>
+          <span class="metric-value" id="metricRunning" style="color: #2563EB;">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Scheduled</span>
+          <span class="metric-value" id="metricScheduled" style="color: #D97706;">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Completed</span>
+          <span class="metric-value" id="metricCompleted" style="color: #059669;">0</span>
+        </div>
+      </section>
+
+      <!-- Campaign Status Filters -->
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;">
+        <button type="button" class="pill-btn active" id="filterAll" onclick="setCampaignFilter('all')">All</button>
+        <button type="button" class="pill-btn" id="filterRunning" onclick="setCampaignFilter('running')">Running</button>
+        <button type="button" class="pill-btn" id="filterScheduled" onclick="setCampaignFilter('scheduled')">Scheduled</button>
+        <button type="button" class="pill-btn" id="filterCompleted" onclick="setCampaignFilter('completed')">Completed</button>
+      </div>
+
+      <!-- Campaigns Table Card -->
+      <div class="campaign-table-card">
+        <table class="campaign-table">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Status</th>
+              <th>Channel</th>
+              <th>Audience</th>
+              <th>Telemetry Progress</th>
+              <th>Replies</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="campaignsTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 48px; color: #6E6A62;">Loading campaigns...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Campaign Creation Wizard Modal -->
+  <div id="campaignModal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="padding: 20px 24px; border-bottom: 1px solid #ECE8DF; display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="wizardTitle" style="font-size: 16px; font-weight: 600; color: #171717; margin: 0;">Create Outreach Campaign</h3>
+        <button type="button" onclick="closeCampaignModal()" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: #6E6A62;">&times;</button>
+      </div>
+
+      <div style="padding: 24px;">
+        <!-- Step Indicators -->
+        <div class="step-indicator">
+          <div class="step-dot active" id="stepDot1"><span class="step-num">1</span> Basics</div>
+          <div class="step-dot" id="stepDot2"><span class="step-num">2</span> Audience</div>
+          <div class="step-dot" id="stepDot3"><span class="step-num">3</span> Template</div>
+          <div class="step-dot" id="stepDot4"><span class="step-num">4</span> Schedule</div>
+          <div class="step-dot" id="stepDot5"><span class="step-num">5</span> Review</div>
+        </div>
+
+        <form id="wizardForm" onsubmit="event.preventDefault()">
+          <!-- Step 1: Basics -->
+          <div class="wizard-step active" id="step1">
+            <div class="form-group">
+              <label class="form-label">Campaign Title</label>
+              <input type="text" id="cmpTitle" class="form-input" placeholder="e.g. Q3 Founder Followup Outreach" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description / Internal Notes</label>
+              <textarea id="cmpDescription" class="form-textarea" rows="3" placeholder="Optional context or goals for this campaign..."></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Primary Channel</label>
+              <select id="cmpChannel" class="form-select" onchange="handleWizardChannelChange()">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Step 2: Audience Filter -->
+          <div class="wizard-step" id="step2">
+            <div class="form-group">
+              <label class="form-label">Target Tag</label>
+              <select id="cmpAudienceTag" class="form-select" onchange="previewAudienceCount()">
+                <option value="">All Contacts (No tag filter)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Attention / Triage Status</label>
+              <select id="cmpAudienceStatus" class="form-select" onchange="previewAudienceCount()">
+                <option value="">All Statuses</option>
+                <option value="attention">Needs Attention</option>
+                <option value="needs_follow_up">Needs Follow Up</option>
+                <option value="waiting_on_them">Waiting on Them</option>
+                <option value="recently_replied">Recently Replied</option>
+              </select>
+            </div>
+
+            <!-- Live Audience Preview Box -->
+            <div style="background: #F4F3EF; border: 1px solid #ECE8DF; border-radius: 10px; padding: 16px; margin-top: 16px; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: #171717;">Audience Snapshot Estimate</div>
+                <div style="font-size: 12px; color: #6E6A62;">Contacts matching current filters with valid channel targets</div>
+              </div>
+              <div id="audiencePreviewCount" style="font-size: 20px; font-weight: 700; color: #171717;">--</div>
+            </div>
+          </div>
+
+          <!-- Step 3: Template Selection -->
+          <div class="wizard-step" id="step3">
+            <div class="form-group">
+              <label class="form-label">Select Template</label>
+              <select id="cmpTemplateSelect" class="form-select" onchange="handleTemplateSelectChange()">
+                <option value="">-- Choose Template --</option>
+              </select>
+            </div>
+
+            <div id="selectedTemplatePreview" style="background: #FAF9F6; border: 1px solid #ECE8DF; border-radius: 10px; padding: 16px; font-size: 13px; line-height: 1.5; margin-top: 12px; display: none;">
+              <div id="selectedTemplateHeader" style="font-weight: 600; margin-bottom: 6px; display: none;"></div>
+              <div id="selectedTemplateSubject" style="font-weight: 600; margin-bottom: 6px; display: none;"></div>
+              <div id="selectedTemplateBody" style="white-space: pre-wrap; color: #171717;"></div>
+              <div id="selectedTemplateFooter" style="font-size: 11px; color: #6E6A62; margin-top: 8px; border-top: 1px solid #ECE8DF; padding-top: 6px; display: none;"></div>
+            </div>
+          </div>
+
+          <!-- Step 4: Dispatch Timing -->
+          <div class="wizard-step" id="step4">
+            <div class="form-group">
+              <label class="form-label">Dispatch Mode</label>
+              <div style="display: flex; gap: 12px; margin-top: 4px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">
+                  <input type="radio" name="timingMode" value="immediate" checked onchange="handleTimingModeChange()" /> Immediate Dispatch
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">
+                  <input type="radio" name="timingMode" value="scheduled" onchange="handleTimingModeChange()" /> Schedule for Later
+                </label>
+              </div>
+            </div>
+
+            <div id="scheduleTimeContainer" class="form-group" style="display: none; margin-top: 16px;">
+              <label class="form-label">Schedule Date & Time</label>
+              <input type="datetime-local" id="cmpScheduledFor" class="form-input" />
+            </div>
+          </div>
+
+          <!-- Step 5: Review & Confirmation -->
+          <div class="wizard-step" id="step5">
+            <div style="background: #FCFBF8; border: 1px solid #ECE8DF; border-radius: 12px; padding: 20px;">
+              <h4 style="font-size: 14px; font-weight: 600; color: #171717; margin: 0 0 16px 0;">Campaign Launch Summary</h4>
+              
+              <div style="display: grid; grid-template-columns: 140px 1fr; gap: 10px; font-size: 13px; line-height: 1.4;">
+                <div style="color: #6E6A62; font-weight: 500;">Title:</div>
+                <div id="revTitle" style="font-weight: 600; color: #171717;">--</div>
+
+                <div style="color: #6E6A62; font-weight: 500;">Channel:</div>
+                <div id="revChannel" style="text-transform: capitalize; color: #171717;">--</div>
+
+                <div style="color: #6E6A62; font-weight: 500;">Audience Snapshot:</div>
+                <div id="revAudience" style="font-weight: 600; color: #171717;">--</div>
+
+                <div style="color: #6E6A62; font-weight: 500;">Template:</div>
+                <div id="revTemplate" style="color: #171717;">--</div>
+
+                <div style="color: #6E6A62; font-weight: 500;">Timing:</div>
+                <div id="revTiming" style="color: #171717;">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigation Footer Buttons -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 28px; pt: 16px; border-top: 1px solid #ECE8DF; padding-top: 16px;">
+            <button type="button" id="prevStepBtn" onclick="prevWizardStep()" style="display: none; padding: 8px 16px; border: 1px solid #ECE8DF; background: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">&larr; Back</button>
+            <div style="margin-left: auto; display: flex; gap: 10px;">
+              <button type="button" onclick="closeCampaignModal()" style="padding: 8px 16px; border: 1px solid #ECE8DF; background: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">Cancel</button>
+              <button type="button" id="nextStepBtn" onclick="nextWizardStep()" style="padding: 8px 20px; border: none; background: #171717; color: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">Next &rarr;</button>
+              <button type="button" id="launchCampaignBtn" onclick="handleLaunchCampaignSubmit()" style="display: none; padding: 8px 22px; border: none; background: #166534; color: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">Launch Campaign</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Campaign Detail & Recipient Telemetry Drawer -->
+  <div id="telemetryDrawer" class="drawer-overlay">
+    <div class="drawer-card">
+      <div style="padding: 20px 24px; border-bottom: 1px solid #ECE8DF; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 id="drawerTitle" style="font-size: 16px; font-weight: 600; color: #171717; margin: 0;">Campaign Telemetry</h3>
+          <div id="drawerSubtitle" style="font-size: 12px; color: #6E6A62; margin-top: 2px;">Live execution status</div>
+        </div>
+        <button type="button" onclick="closeTelemetryDrawer()" style="border: none; background: transparent; font-size: 24px; cursor: pointer; color: #6E6A62;">&times;</button>
+      </div>
+
+      <!-- Drawer Content -->
+      <div style="padding: 24px; overflow-y: auto; flex: 1;">
+        <!-- Telemetry Breakdown Cards -->
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+          <div style="background: #F4F3EF; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 600; color: #6E6A62;">TOTAL</div>
+            <div id="drwTotal" style="font-size: 18px; font-weight: 700; color: #171717; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: #EFF6FF; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 600; color: #1D4ED8;">SENT</div>
+            <div id="drwSent" style="font-size: 18px; font-weight: 700; color: #1D4ED8; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: #ECFDF5; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 600; color: #059669;">DELIVERED</div>
+            <div id="drwDelivered" style="font-size: 18px; font-weight: 700; color: #059669; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: #F5F3FF; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 600; color: #7C3AED;">REPLIED</div>
+            <div id="drwReplied" style="font-size: 18px; font-weight: 700; color: #7C3AED; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: #FEF2F2; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; font-weight: 600; color: #DC2626;">FAILED</div>
+            <div id="drwFailed" style="font-size: 18px; font-weight: 700; color: #DC2626; margin-top: 4px;">0</div>
+          </div>
+        </div>
+
+        <!-- Recipient Table -->
+        <h4 style="font-size: 14px; font-weight: 600; color: #171717; margin: 0 0 12px 0;">Recipient Snapshot Records</h4>
+        <div style="border: 1px solid #ECE8DF; border-radius: 10px; overflow: hidden;">
+          <table class="campaign-table" style="font-size: 12px;">
+            <thead>
+              <tr>
+                <th>Recipient</th>
+                <th>Target</th>
+                <th>Delivery Status</th>
+                <th>Response</th>
+                <th>Timeline</th>
+              </tr>
+            </thead>
+            <tbody id="drawerRecipientsBody">
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 32px; color: #6E6A62;">Loading recipients...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/campaigns.js"></script>
+</body>
+</html>

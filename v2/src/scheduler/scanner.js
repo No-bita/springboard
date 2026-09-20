@@ -77,6 +77,65 @@ export async function scanAndClaimDueOccurrences(db, queue = null, limit = 50, i
       }
     }
 
+  // 4. Scan for scheduled campaigns reaching due time
+  try {
+    const dueCmpRes = await db.execute({
+      sql: `
+        SELECT id, user_id, scheduled_for
+        FROM campaigns
+        WHERE status = 'scheduled' AND scheduled_for <= datetime('now')
+        LIMIT ?
+      `,
+      args: [limit]
+    });
+
+    const dueCampaigns = dueCmpRes?.rows || [];
+    for (const cmp of dueCampaigns) {
+      const claimCmp = await db.execute({
+        sql: `
+          UPDATE campaigns
+          SET status = 'running', launched_at = datetime('now')
+          WHERE id = ? AND status = 'scheduled'
+          RETURNING id
+        `,
+        args: [cmp.id]
+      });
+
+      const isAcquired = (claimCmp?.rows && claimCmp.rows.length === 1) ||
+                         (claimCmp?.changes === 1) ||
+                         (claimCmp?.meta?.changes === 1);
+
+      if (isAcquired) {
+        await db.execute({
+          sql: `UPDATE campaign_recipients SET delivery_status = 'queued' WHERE campaign_id = ? AND delivery_status = 'pending'`,
+          args: [cmp.id]
+        });
+
+        const cmpPayload = {
+          type: "campaign_dispatch",
+          campaign_id: cmp.id,
+          user_id: cmp.user_id
+        };
+
+        if (queue && typeof queue.send === "function") {
+          try {
+            await queue.send(cmpPayload);
+          } catch (enqueueErr) {
+            console.error(`[SCHEDULER CRON] Failed enqueuing campaign ${cmp.id}:`, enqueueErr);
+          }
+        } else if (typeof inlineConsumer === "function") {
+          try {
+            await inlineConsumer(cmpPayload);
+          } catch (err) {
+            console.error(`[SCHEDULER INLINE] Execution error for campaign ${cmp.id}:`, err);
+          }
+        }
+      }
+    }
+  } catch (cmpErr) {
+    console.warn("[SCHEDULER CRON] Error scanning scheduled campaigns:", cmpErr);
+  }
+
   return {
     scanned: candidates.length,
     claimed: claimedOccurrences.length,

@@ -33,6 +33,7 @@ import {
 import {
   handleGetTemplates,
   handleCreateTemplate,
+  handleUpdateTemplate,
   handleDeleteTemplate,
 } from "./api/templates.js";
 import {
@@ -41,6 +42,17 @@ import {
   handleCancelSchedule,
   handleRetryOccurrence,
 } from "./api/schedules.js";
+import {
+  handleGetCampaigns,
+  handleGetCampaignDetail,
+  handleGetCampaignRecipients,
+  handleCreateCampaign,
+  handleSetCampaignMessages,
+  handlePreviewCampaignAudience,
+  handleLaunchCampaign,
+  handleScheduleCampaign,
+  handleCancelCampaign,
+} from "./api/campaigns.js";
 import {
   handleGetAdminAnalyticsData,
   handleGetAdminAnalyticsDashboard,
@@ -73,6 +85,8 @@ app.post("/api/auth/forgot-password", handleResetPassword);
 // Application Pages & Redirects
 app.get("/app", (c) => c.redirect("/dashboard.html"));
 app.get("/dashboard", (c) => c.redirect("/dashboard.html"));
+app.get("/campaigns", (c) => c.redirect("/campaigns.html"));
+app.get("/templates", (c) => c.redirect("/templates.html"));
 app.get("/early-access", (c) => c.redirect("/register.html"));
 app.get("/forgot-password", (c) => c.redirect("/forgot-password.html"));
 app.get("/admin", (c) => c.redirect("/admin/analytics"));
@@ -103,6 +117,9 @@ app.use("/api/requests/*", authMiddleware);
 app.use("/api/schedules", authMiddleware);
 app.use("/api/schedules/*", authMiddleware);
 app.use("/api/templates", authMiddleware);
+app.use("/api/templates/*", authMiddleware);
+app.use("/api/campaigns", authMiddleware);
+app.use("/api/campaigns/*", authMiddleware);
 app.use("/api/user/*", authMiddleware);
 app.use("/api/admin/*", authMiddleware, adminOnlyMiddleware);
 
@@ -131,8 +148,22 @@ app.post("/api/contacts/:id/activities/note", handleAddContactNote);
 
 // Message Templates Endpoints
 app.get("/api/templates", handleGetTemplates);
+app.post("/api/templates", handleCreateTemplate);
+app.put("/api/templates/:id", handleUpdateTemplate);
+app.delete("/api/templates/:id", handleDeleteTemplate);
 app.post("/api/admin/templates", handleCreateTemplate);
 app.delete("/api/admin/templates/:id", handleDeleteTemplate);
+
+// Campaigns Endpoints
+app.get("/api/campaigns", handleGetCampaigns);
+app.get("/api/campaigns/:id", handleGetCampaignDetail);
+app.get("/api/campaigns/:id/recipients", handleGetCampaignRecipients);
+app.post("/api/campaigns", handleCreateCampaign);
+app.post("/api/campaigns/:id/messages", handleSetCampaignMessages);
+app.post("/api/campaigns/:id/audience/preview", handlePreviewCampaignAudience);
+app.post("/api/campaigns/:id/launch", handleLaunchCampaign);
+app.post("/api/campaigns/:id/schedule", handleScheduleCampaign);
+app.post("/api/campaigns/:id/cancel", handleCancelCampaign);
 
 // Schedules Endpoints
 app.get("/api/schedules", handleGetSchedules);
@@ -170,7 +201,7 @@ app.get("/api/user/profile", async (c) => {
 app.scheduled = async (event, env, ctx) => {
   const db = getDbClient(env);
   try {
-    await scanAndClaimDueOccurrences(env, db);
+    await scanAndClaimDueOccurrences(db, env.SCHEDULE_QUEUE);
   } catch (err) {
     console.error("[CRON] Scanner execution error:", err);
   }

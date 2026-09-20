@@ -74,9 +74,9 @@ export async function handleCreateSchedule(c) {
       targetContactId = "cnt_" + crypto.randomUUID();
       const contactDisplayName = body.name || `Contact ${canonicalPhone.slice(-4)}`;
       await db.execute({
-        sql: `INSERT INTO contacts (id, user_id, contact_person, name, phone_number, email, created_at, last_updated)
-              VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-        args: [targetContactId, userId, contactDisplayName, contactDisplayName, canonicalPhone, email],
+        sql: `INSERT INTO contacts (id, user_id, name, phone_number, email, created_at, last_updated)
+              VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        args: [targetContactId, userId, contactDisplayName, canonicalPhone, email],
       });
     }
   }

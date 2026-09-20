@@ -45,6 +45,28 @@ export async function handleWebhookEvent(c) {
         args: [status, providerMsgId]
       }).catch(() => {});
 
+      // Update campaign_recipients if message originated from a campaign
+      if (status === "delivered" || status === "read" || status === "sent") {
+        await db.execute({
+          sql: `UPDATE campaign_recipients 
+                SET delivery_status = ?,
+                    delivered_at = CASE WHEN ? = 'delivered' AND delivered_at IS NULL THEN datetime('now') ELSE delivered_at END,
+                    read_at = CASE WHEN ? = 'read' AND read_at IS NULL THEN datetime('now') ELSE read_at END
+                WHERE provider_message_id = ?`,
+          args: [status, status, status, providerMsgId]
+        }).catch(() => {});
+      } else if (status === "failed") {
+        await db.execute({
+          sql: `UPDATE campaign_recipients 
+                SET delivery_status = 'failed',
+                    error_code = 'DELIVERY_FAILED',
+                    error_message = ?,
+                    updated_at = datetime('now')
+                WHERE provider_message_id = ?`,
+          args: [errorMsg || "Delivery failed", providerMsgId]
+        }).catch(() => {});
+      }
+
       // Credit Reconciliation & Refunds on failure
       const msgRes = await db.execute({
         sql: "SELECT id, user_id, idempotency_key, status FROM whatsapp_messages WHERE provider_message_id = ? LIMIT 1",
@@ -156,8 +178,8 @@ export async function handleWebhookEvent(c) {
         contactId = "cnt_" + crypto.randomUUID();
         contactName = msg.profileName || `Contact ${canonicalPhone.slice(-4)}`;
         await db.execute({
-          sql: "INSERT INTO contacts (id, user_id, contact_person, name, phone_number, last_inbound_at, last_interaction_at, created_at, last_updated) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), datetime('now'))",
-          args: [contactId, userId, contactName, contactName, canonicalPhone]
+          sql: "INSERT INTO contacts (id, user_id, name, phone_number, last_inbound_at, last_interaction_at, created_at, last_updated) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), datetime('now'))",
+          args: [contactId, userId, contactName, canonicalPhone]
         });
       }
 
@@ -190,6 +212,27 @@ export async function handleWebhookEvent(c) {
         ) VALUES (?, ?, ?, ?, NULL, 'inbound', 'whatsapp', 'contact', ?, 'meta_whatsapp', ?, NULL, datetime('now'))`,
         args: [messageId, conversationId, contactId, userId, clientText, providerMsgId]
       });
+
+      // Attribute reply to most recent unreplied outbound campaign recipient
+      const phone10 = canonicalPhone.startsWith("91") ? canonicalPhone.slice(2) : canonicalPhone;
+      const campRecpRes = await db.execute({
+        sql: `SELECT id, campaign_id FROM campaign_recipients 
+              WHERE user_id = ? AND channel = 'whatsapp' AND (phone_snapshot = ? OR phone_snapshot = ?) AND response_status = 'no_reply' AND delivery_status IN ('sent', 'delivered', 'read')
+              ORDER BY sent_at DESC LIMIT 1`,
+        args: [userId, canonicalPhone, phone10]
+      });
+
+      if (campRecpRes?.rows?.length > 0) {
+        const recp = campRecpRes.rows[0];
+        await db.execute({
+          sql: `UPDATE campaign_recipients 
+                SET response_status = 'replied',
+                    replied_at = datetime('now'),
+                    updated_at = datetime('now')
+                WHERE id = ?`,
+          args: [recp.id]
+        });
+      }
 
       // Log Business Activity Event
       const activityId = "act_" + crypto.randomUUID();

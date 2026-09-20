@@ -221,9 +221,9 @@ export async function handleCreateContact(c) {
   try {
     // 1. Insert Contact
     await db.execute({
-      sql: `INSERT INTO contacts (id, user_id, contact_person, name, phone_number, email, company, notes, created_at, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      args: [contactId, userId, rawName, rawName, canonicalPhone, email, company, notes],
+      sql: `INSERT INTO contacts (id, user_id, name, phone_number, email, company, notes, created_at, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      args: [contactId, userId, rawName, canonicalPhone, email, company, notes],
     });
 
     // 2. Create Initial Conversation
@@ -598,8 +598,8 @@ export async function handleUpdateContact(c) {
     const updatedNotes = notes !== undefined ? notes : current.notes;
 
     await db.execute({
-      sql: `UPDATE contacts SET name = ?, contact_person = ?, email = ?, company = ?, notes = ?, last_updated = datetime('now') WHERE id = ? AND user_id = ?`,
-      args: [updatedName, updatedName, updatedEmail, updatedCompany, updatedNotes, contactId, userId],
+      sql: `UPDATE contacts SET name = ?, email = ?, company = ?, notes = ?, last_updated = datetime('now') WHERE id = ? AND user_id = ?`,
+      args: [updatedName, updatedEmail, updatedCompany, updatedNotes, contactId, userId],
     });
 
     return c.json({ success: true, message: "Contact updated successfully" });

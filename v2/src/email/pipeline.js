@@ -215,7 +215,6 @@ export async function executeEmailMessagingPipeline(
       args: [providerMsgId, msgId]
     }).catch(e => console.error("Failed updating email message success:", e));
 
-    // Persist exact rendered body into case_timeline
     const timelineId = crypto.randomUUID();
     const metadata = {
       channel: "email",
@@ -227,11 +226,45 @@ export async function executeEmailMessagingPipeline(
       email_status: "sent"
     };
 
+    // Persist message into conversations, messages, and activities
+    if (contactId && user?.id) {
+      try {
+        const convRes = await db.execute({
+          sql: "SELECT id FROM conversations WHERE user_id = ? AND contact_id = ? AND channel = 'email' LIMIT 1",
+          args: [user.id, contactId]
+        });
+
+        let convId = convRes?.rows?.[0]?.id;
+        if (!convId) {
+          convId = "conv_em_" + crypto.randomUUID();
+          await db.execute({
+            sql: "INSERT INTO conversations (id, user_id, contact_id, channel, last_message_at, created_at) VALUES (?, ?, ?, 'email', datetime('now'), datetime('now'))",
+            args: [convId, user.id, contactId]
+          });
+        }
+
+        const msgRowId = "msg_em_" + crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO messages (id, conversation_id, contact_id, user_id, direction, channel, sender_type, content, template_id, provider, provider_message_id, delivery_status, created_at)
+                VALUES (?, ?, ?, ?, 'outbound', 'email', 'user', ?, ?, 'resend', ?, 'sent', datetime('now'))`,
+          args: [msgRowId, convId, contactId, user.id, renderedBody, templateName, providerMsgId]
+        });
+
+        const actId = "act_" + crypto.randomUUID();
+        await db.execute({
+          sql: `INSERT INTO activities (id, user_id, contact_id, activity_type, title, description, metadata, created_at)
+                VALUES (?, ?, ?, 'outreach_sent', 'Email Outreach Dispatched', ?, ?, datetime('now'))`,
+          args: [actId, user.id, contactId, renderedBody, JSON.stringify(metadata)]
+        });
+      } catch (_) {}
+    }
+
+    // Legacy case_timeline fallback
     await db.execute({
       sql: `INSERT INTO case_timeline (id, contact_id, case_id, provider_message_id, template_name, event_type, content, metadata, created_by)
             VALUES (?, ?, ?, ?, ?, 'email_sent', ?, ?, 'system')`,
       args: [timelineId, contactId, caseId, providerMsgId, templateName, renderedBody, JSON.stringify(metadata)]
-    }).catch(e => console.error("Failed writing timeline message:", e));
+    }).catch(() => {});
 
     return {
       success: true,
