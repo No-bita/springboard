@@ -11,7 +11,7 @@ export const authMiddleware = async (c, next) => {
   const authHeader = c.req.header("Authorization");
 
   if (isDev && (!authHeader || authHeader === "Bearer dev_token" || authHeader === "dev_token")) {
-    c.set("user", { user_id: "dev-user-1", username: "DevAgent", role: "admin" });
+    c.set("user", { id: "dev-user-1", user_id: "dev-user-1", username: "DevAgent", role: "admin" });
     return next();
   }
 

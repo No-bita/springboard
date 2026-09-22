@@ -67,7 +67,7 @@ async function resolveMatchingContacts(db, userId, filter = {}) {
 export async function handleGetCampaigns(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   try {
     const res = await db.execute({
@@ -160,7 +160,7 @@ export async function handleGetCampaigns(c) {
 export async function handleGetCampaignDetail(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   try {
@@ -273,7 +273,7 @@ export async function handleGetCampaignDetail(c) {
 export async function handleGetCampaignRecipients(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   const limit = Math.min(Number(c.req.query("limit")) || 50, 200);
@@ -335,7 +335,7 @@ export async function handleGetCampaignRecipients(c) {
 export async function handleCreateCampaign(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   const body = await c.req.json().catch(() => ({}));
   const name = String(body.name || "").trim();
@@ -392,7 +392,7 @@ export async function handleCreateCampaign(c) {
 export async function handleSetCampaignMessages(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -537,7 +537,7 @@ export async function handleSetCampaignMessages(c) {
 export async function handlePreviewCampaignAudience(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -613,7 +613,7 @@ async function snapshotCampaignRecipients(db, campaignId, userId, channels, cont
 export async function handleLaunchCampaign(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -698,7 +698,7 @@ export async function handleLaunchCampaign(c) {
 export async function handleScheduleCampaign(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -781,7 +781,7 @@ export async function handleScheduleCampaign(c) {
 export async function handleCancelCampaign(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const campaignId = c.req.param("id");
 
   try {

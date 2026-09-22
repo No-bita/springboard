@@ -276,7 +276,7 @@ export async function handleGetTemplates(c) {
 export async function handleCreateTemplate(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   const body = await c.req.json().catch(() => ({}));
   const rawName = String(body.name || "").trim().toLowerCase();
@@ -433,7 +433,7 @@ export async function handleCreateTemplate(c) {
 export async function handleUpdateTemplate(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const templateId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -535,7 +535,7 @@ export async function handleUpdateTemplate(c) {
 export async function handleDeleteTemplate(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const templateId = c.req.param("id");
 
   try {
