@@ -16,7 +16,7 @@ export async function clientSendEmail({
   const isMock = env.MOCK_EMAIL === "true" || (env.ENVIRONMENT === "development" && !env.RESEND_API_KEY);
 
   const recipientList = Array.isArray(to) ? to : [to];
-  const fromAddress = from || env.RESEND_FROM_EMAIL || "Collectrr <onboarding@resend.dev>";
+  const fromAddress = from || env.RESEND_FROM_EMAIL || "Springboard <onboarding@resend.dev>";
 
   if (isMock) {
     const mockId = "re_mock_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);

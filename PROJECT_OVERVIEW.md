@@ -1,16 +1,16 @@
-# Collectrr V2 — Personal CRM Technical Architecture & System Guide
+# Springboard V2 — Personal CRM Technical Architecture & System Guide
 
-Welcome to the Collectrr architectural and engineering guide. This document provides an exhaustive, authoritative breakdown of how Collectrr works under the hood for contributors, architects, and engineers modifying the system.
+Welcome to the Springboard architectural and engineering guide. This document provides an exhaustive, authoritative breakdown of how Springboard works under the hood for contributors, architects, and engineers modifying the system.
 
 ---
 
 ## 1. System Vision & Domain Model
 
-Collectrr is a serverless, edge-deployed **Personal CRM for keeping work moving with people**. Built on Cloudflare Workers, Cloudflare D1, and Cloudflare R2, it combines direct omnichannel outreach (WhatsApp Cloud API & Email), 2-way conversation tracking, attention triage, and structured client requests.
+Springboard is a serverless, edge-deployed **Personal CRM for keeping work moving with people**. Built on Cloudflare Workers, Cloudflare D1, and Cloudflare R2, it combines direct omnichannel outreach (WhatsApp Cloud API & Email), 2-way conversation tracking, attention triage, and structured client requests.
 
 ### Core Architecture Principles
 1. **Contact is Primary**: The core unit of work is the `Contact` (belonging to a `User`). A contact can have active conversations across channels, outstanding requests, scheduled follow-ups, and an activity log.
-2. **Generic Requests**: Instead of vertical-specific loan/CA cases, Collectrr manages generic `requests` and `request_items` (e.g. "Send signed contract", "Upload PAN & GST", "Confirm time for Friday").
+2. **Generic Requests**: Instead of vertical-specific loan/CA cases, Springboard manages generic `requests` and `request_items` (e.g. "Send signed contract", "Upload PAN & GST", "Confirm time for Friday").
 3. **Decoupled Work State vs Transport Telemetry (Split Columns)**:
    - **Action Status**: `Needs Attention` | `Needs Follow-Up` | `Waiting on Them` | `Recently Replied` | `Completed` | `Idle`
    - **Delivery Status**: `Replied` | `Read` | `Delivered` | `Sent` | `Queued` | `Failed` | `Not Contacted`

@@ -97,7 +97,7 @@ app.get("/observability", handleGetAdminDashboard);
 app.get("/dd", handleGetAdminDashboard);
 
 // Health Check API
-app.get("/api/health", (c) => c.text("Collectr Personal CRM API Running"));
+app.get("/api/health", (c) => c.text("Springboard Personal CRM API Running"));
 
 // Public Webhook Routes (Meta WhatsApp)
 app.get("/api/webhook", handleWebhookVerify);

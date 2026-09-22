@@ -451,7 +451,7 @@ export async function handleSetCampaignMessages(c) {
           try { buttonsSnapshot = typeof t.buttons === "string" ? JSON.parse(t.buttons) : (t.buttons || []); } catch (_) {}
           try { paramMappingsSnapshot = typeof t.wa_mappings === "string" ? JSON.parse(t.wa_mappings) : (t.wa_mappings || {}); } catch (_) {}
         } else {
-          subjectSnapshot = t.em_subject || "Message from Collectrr";
+          subjectSnapshot = t.em_subject || "Message from Springboard";
           bodySnapshot = t.em_body || "";
           try { paramMappingsSnapshot = typeof t.em_mappings === "string" ? JSON.parse(t.em_mappings) : (t.em_mappings || {}); } catch (_) {}
         }
@@ -461,7 +461,7 @@ export async function handleSetCampaignMessages(c) {
           const sys = WHATSAPP_TEMPLATES[templateId];
           templateNameSnapshot = sys.name;
           bodySnapshot = sys.body_text || sys.body?.text || "";
-          footerSnapshot = "Collectrr Verification Portal";
+          footerSnapshot = "Springboard Verification Portal";
           if (sys.button) buttonsSnapshot = [{ type: "URL", text: sys.button.text, url: "" }];
         } else {
           const sysEm = SYSTEM_EMAIL_TEMPLATES.find(t => t.id === templateId || t.name === templateId);
@@ -476,7 +476,7 @@ export async function handleSetCampaignMessages(c) {
       }
     } else {
       bodySnapshot = String(customBody || "").trim();
-      subjectSnapshot = String(customSubject || "Message from Collectrr").trim();
+      subjectSnapshot = String(customSubject || "Message from Springboard").trim();
     }
 
     if (!bodySnapshot) {

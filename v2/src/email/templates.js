@@ -19,7 +19,7 @@ export function renderEmailContent({
   templateName,
   templateParams = [],
   contactPerson = "Client",
-  userName = "Collectrr",
+  userName = "Springboard",
   userPhone = "",
   rawToken = "verify",
   uploadLink = "",
@@ -127,7 +127,7 @@ export function renderEmailContent({
           <!-- Footer -->
           <tr>
             <td style="padding: 16px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
-              This is a secure document request sent by ${escapeHtml(firmName)} via Collectrr.
+              This is a secure document request sent by ${escapeHtml(firmName)} via Springboard.
             </td>
           </tr>
         </table>

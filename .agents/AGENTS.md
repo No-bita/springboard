@@ -1,4 +1,4 @@
-# Collectrr Development & Architecture Rules
+# Springboard Development & Architecture Rules
 
 ## Navigation & Codebase Investigation
 

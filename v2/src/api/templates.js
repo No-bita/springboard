@@ -21,7 +21,7 @@ export const SYSTEM_EMAIL_TEMPLATES = [
     displayName: "Founder Introduction",
     channel: "email",
     scope: "system",
-    subject: "Introduction — {{name}} & Collectrr",
+    subject: "Introduction — {{name}} & Springboard",
     body_text: "Hi {{name}},\n\nI came across your work and wanted to introduce how you can manage personal outreach and client requests seamlessly.\n\nWould love to connect if this sounds interesting.\n\nBest regards,\n{{user_name}}",
     param_mappings: {
       subject: ["name"],
