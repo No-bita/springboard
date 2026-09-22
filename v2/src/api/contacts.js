@@ -12,7 +12,7 @@ const MESSAGE_COST_PAISE = 90;
 export async function handleGetContacts(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   const search = (c.req.query("search") || "").trim().toLowerCase();
   const filter = (c.req.query("filter") || "all").trim().toLowerCase();
@@ -20,7 +20,7 @@ export async function handleGetContacts(c) {
   try {
     let sql = `
       SELECT 
-        c.id, c.user_id, COALESCE(c.name, c.contact_person) as name, c.phone_number, c.email, c.company, c.notes,
+        c.id, c.user_id, c.name, c.phone_number, c.email, c.company, c.notes,
         c.last_outbound_at, c.last_inbound_at, c.last_interaction_at,
         c.created_at, c.last_updated,
         conv.id as conversation_id, conv.unread_count, conv.last_message_at,
@@ -60,7 +60,7 @@ export async function handleGetContacts(c) {
     const args = [userId];
 
     if (search) {
-      sql += ` AND (LOWER(COALESCE(c.name, c.contact_person, '')) LIKE ? OR c.phone_number LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ? OR LOWER(COALESCE(c.company, '')) LIKE ?)`;
+      sql += ` AND (LOWER(c.name) LIKE ? OR c.phone_number LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ? OR LOWER(COALESCE(c.company, '')) LIKE ?)`;
       const s = `%${search}%`;
       args.push(s, s, s, s);
     }
@@ -182,7 +182,7 @@ export async function handleGetContacts(c) {
 export async function handleCreateContact(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   const body = await c.req.json().catch(() => ({}));
   const rawName = String(body.name || body.contactPerson || "").trim();
@@ -204,7 +204,7 @@ export async function handleCreateContact(c) {
 
   // Check unique contact for user
   const existing = await db.execute({
-    sql: "SELECT id, COALESCE(name, contact_person) as name FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
+    sql: "SELECT id, name FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
     args: [userId, canonicalPhone],
   });
 
@@ -409,7 +409,7 @@ export async function handleCreateContact(c) {
 export async function handleGetContactWorkspace(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const contactId = c.req.param("id");
 
   try {
@@ -429,46 +429,41 @@ export async function handleGetContactWorkspace(c) {
         args: [contactId],
       }).catch(() => ({ rows: [] }));
       if (anyContact.rows.length > 0 || anyCase.rows.length > 0) {
-        return c.json({ error: "Access denied. You do not have permission to access this contact." }, 403);
+        return c.json({ error: "Access denied. You do not have permission to view this contact." }, 403);
       }
       return c.json({ error: "Contact not found." }, 404);
     }
 
     const contact = contactRes.rows[0];
 
-    // 2. Fetch Conversation & Messages (Omnichannel: WhatsApp + Email)
-    const convRes = await db.execute({
-      sql: "SELECT * FROM conversations WHERE contact_id = ? AND user_id = ? AND channel = 'whatsapp' LIMIT 1",
-      args: [contactId, userId],
-    });
-    const conversation = convRes.rows[0] || null;
+    // 2. Fetch Conversation & Messages
+    let conversation = null;
+    let messages = [];
 
-    const msgRes = await db.execute({
-      sql: `SELECT m.*, r.title as request_title 
-            FROM messages m 
-            LEFT JOIN requests r ON r.id = m.request_id 
-            WHERE m.contact_id = ? 
-            ORDER BY m.created_at ASC`,
+    const convRes = await db.execute({
+      sql: "SELECT * FROM conversations WHERE contact_id = ? AND channel = 'whatsapp' LIMIT 1",
       args: [contactId],
     });
-    const messages = msgRes.rows || [];
 
-    // Mark unread messages across all conversations as read
-    await db.execute({
-      sql: "UPDATE conversations SET unread_count = 0 WHERE contact_id = ? AND user_id = ?",
-      args: [contactId, userId],
-    }).catch(() => {});
+    if (convRes.rows.length > 0) {
+      conversation = convRes.rows[0];
+      const msgRes = await db.execute({
+        sql: "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
+        args: [conversation.id],
+      });
+      messages = msgRes.rows || [];
+    }
 
-    // 3. Fetch Requests and their Items
+    // 3. Fetch Requests & Items
     const reqRes = await db.execute({
-      sql: "SELECT * FROM requests WHERE contact_id = ? AND user_id = ? ORDER BY created_at DESC",
-      args: [contactId, userId],
+      sql: "SELECT * FROM requests WHERE contact_id = ? ORDER BY created_at DESC",
+      args: [contactId],
     });
 
     const requests = [];
     for (const req of reqRes.rows || []) {
       const itemsRes = await db.execute({
-        sql: "SELECT * FROM request_items WHERE request_id = ? ORDER BY created_at ASC",
+        sql: "SELECT * FROM request_items WHERE request_id = ? ORDER BY order_index ASC",
         args: [req.id],
       });
       requests.push({
@@ -479,42 +474,29 @@ export async function handleGetContactWorkspace(c) {
 
     // 4. Fetch Activities
     const actRes = await db.execute({
-      sql: "SELECT * FROM activities WHERE contact_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50",
-      args: [contactId, userId],
+      sql: "SELECT * FROM activities WHERE contact_id = ? ORDER BY created_at DESC LIMIT 50",
+      args: [contactId],
     });
 
-    // 5. Compute 24-hour customer window status
+    // Compute live 24h Meta Customer Service Window
     const windowStatus = await getCustomerReplyWindowStatus(db, contactId);
 
-    // 6. Compute Delivery & Action Status
-    let deliveryStatus = "not_contacted";
-    const inboundMsgs = messages.filter(m => m.direction === "inbound" || m.sender_type === "contact");
-    const outboundMsgs = messages.filter(m => m.direction === "outbound" || !m.direction);
+    // Compute decoupled presentation statuses
+    const outboundMsgs = messages.filter(m => m.direction === "outbound");
     const latestOutbound = outboundMsgs.length > 0 ? outboundMsgs[outboundMsgs.length - 1] : null;
 
-    if (inboundMsgs.length > 0 || contact.last_inbound_at || windowStatus?.hasReplied) {
-      deliveryStatus = "replied";
-    } else if (latestOutbound) {
-      const st = (latestOutbound.delivery_status || "sent").toLowerCase();
-      if (st === "read") deliveryStatus = "read";
-      else if (st === "delivered") deliveryStatus = "delivered";
-      else if (st === "failed") deliveryStatus = "failed";
-      else if (st === "queued" || st === "claimed" || st === "dispatch_requested") deliveryStatus = "queued";
-      else deliveryStatus = "sent";
-    } else if (contact.last_outbound_at) {
-      deliveryStatus = "sent";
+    let deliveryStatus = "not_contacted";
+    if (latestOutbound) {
+      deliveryStatus = latestOutbound.delivery_status || "sent";
     }
 
-    const nowTime = Date.now();
-    const fortyEightHoursAgo = new Date(nowTime - 48 * 3600 * 1000).toISOString();
-    const activeRequest = requests.find(r => r.status !== "completed" && r.status !== "cancelled");
-    const isWaitingOnMe = activeRequest?.status === "waiting_on_me";
-    const hasFailedMsg = latestOutbound?.delivery_status === "failed";
-    const hasUnread = (conversation?.unread_count || 0) > 0;
-
+    const activeRequest = requests.find(r => !["completed", "cancelled"].includes(r.status));
     let actionStatus = "idle";
-    if (isWaitingOnMe || hasFailedMsg || hasUnread) {
-      actionStatus = "needs_attention";
+    const now = new Date();
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+
+    if (activeRequest?.status === "waiting_on_me" || latestOutbound?.delivery_status === "failed") {
+      actionStatus = "attention";
     } else if (activeRequest?.status === "needs_follow_up") {
       actionStatus = "needs_follow_up";
     } else if (contact.last_inbound_at && contact.last_inbound_at >= fortyEightHoursAgo) {
@@ -529,7 +511,7 @@ export async function handleGetContactWorkspace(c) {
       success: true,
       contact: {
         id: contact.id,
-        name: contact.name || contact.contact_person,
+        name: contact.name,
         phoneNumber: contact.phone_number,
         email: contact.email,
         company: contact.company,
@@ -561,7 +543,7 @@ export async function handleGetContactWorkspace(c) {
 export async function handleUpdateContact(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const contactId = c.req.param("id");
 
   const body = await c.req.json().catch(() => ({}));
@@ -592,7 +574,7 @@ export async function handleUpdateContact(c) {
     }
 
     const current = contactRes.rows[0];
-    const updatedName = name !== undefined ? name : (current.name || current.contact_person);
+    const updatedName = name !== undefined ? name : current.name;
     const updatedEmail = email !== undefined ? email : current.email;
     const updatedCompany = company !== undefined ? company : current.company;
     const updatedNotes = notes !== undefined ? notes : current.notes;
@@ -616,7 +598,7 @@ export async function handleUpdateContact(c) {
 export async function handleDeleteContact(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
   const contactId = c.req.param("id");
 
   try {
@@ -643,7 +625,7 @@ export async function handleDeleteContact(c) {
 export async function handleCheckContactPhone(c) {
   const db = getDbClient(c.env);
   const user = c.get("user");
-  const userId = user.id;
+  const userId = user?.id || user?.user_id || user?.sub;
 
   const body = await c.req.json().catch(() => ({}));
   const rawPhone = String(body.phone_number || body.phone || body.phoneNumber || body.mobile || "").trim();
