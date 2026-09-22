@@ -355,6 +355,39 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
       assert.equal(inlineHandlerMatch, null, `${filename} contains inline event handler violating strict CSP: ${inlineHandlerMatch?.[0]}`);
     }
   });
+
+  await t.test("14. Account creation (/api/auth/register) is blocked on production environment (403 Forbidden)", async () => {
+    const prodEnv = {
+      ENVIRONMENT: "production",
+      JWT_SECRET,
+      DB: createMockDb()
+    };
+    const res = await app.request("https://crm.aaryanshah.co.in/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "new_prod_user", password: "password123" })
+    }, prodEnv);
+
+    assert.equal(res.status, 403);
+    const body = await res.json();
+    assert.match(body.error, /disabled on production/i);
+  });
+
+  await t.test("15. Account creation (/api/auth/register) is permitted in development/localhost environment", async () => {
+    const devEnv = {
+      ENVIRONMENT: "development",
+      JWT_SECRET,
+      DB: createMockDb()
+    };
+    const res = await app.request("http://localhost:8787/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "dev_user", password: "password123" })
+    }, devEnv);
+
+    // Should not be blocked by production 403 check
+    assert.notEqual(res.status, 403);
+  });
 });
 
 

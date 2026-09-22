@@ -25,6 +25,16 @@ export async function hashPassword(password, saltText) {
 }
 
 export async function handleRegister(c) {
+  // Block new user registrations on production unless explicitly allowed via ALLOW_REGISTRATION flag
+  const reqUrl = c.req?.url || "";
+  const isLocal = reqUrl.includes("localhost") || reqUrl.includes("127.0.0.1");
+  const isDev = c.env?.ENVIRONMENT === "development" || isLocal;
+  const allowRegistration = c.env?.ALLOW_REGISTRATION === "true" || c.env?.ALLOW_REGISTRATION === true;
+
+  if (!isDev && !allowRegistration) {
+    return c.json({ error: "New user registration is disabled on production." }, 403);
+  }
+
   const { username, password } = await c.req.json().catch(() => ({}));
   const u = String(username || "").trim();
   const p = String(password || "").trim();
