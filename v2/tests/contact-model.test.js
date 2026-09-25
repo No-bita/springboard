@@ -218,4 +218,51 @@ test("Personal CRM Contact Domain Model & WhatsApp Invariants", async (t) => {
     assert.ok(res.data.customerWindow, "handleGetContactWorkspace must compute customerWindow");
     assert.ok(Array.isArray(res.data.activities), "handleGetContactWorkspace must return activities array");
   });
+
+  // 8. Contact Creation & contact_person Invariant Contract
+  await t.test("8. handleCreateContact includes contact_person in INSERT statement", async () => {
+    const { handleCreateContact } = await import("../src/api/contacts.js");
+
+    let executedSql = "";
+    let executedArgs = [];
+
+    const mockDb = {
+      async execute({ sql, args }) {
+        if (sql.includes("SELECT id, COALESCE(name, contact_person) as name FROM contacts")) {
+          return { rows: [] };
+        }
+        if (sql.includes("INSERT INTO contacts")) {
+          executedSql = sql;
+          executedArgs = args;
+          return { rows: [], rowsAffected: 1 };
+        }
+        if (sql.includes("INSERT INTO conversations") || sql.includes("INSERT INTO activities")) {
+          return { rows: [], rowsAffected: 1 };
+        }
+        return { rows: [] };
+      }
+    };
+
+    const mockContext = {
+      env: { DB: mockDb },
+      get: (key) => (key === "user" ? { id: "usr_1", username: "Collectr" } : null),
+      req: {
+        json: async () => ({
+          name: "Test Contact",
+          phoneNumber: "9876543210",
+          email: "test@example.com",
+          company: "Test Corp",
+          sendMessage: false,
+        })
+      },
+      json: (data, status = 200) => ({ status, data })
+    };
+
+    const res = await handleCreateContact(mockContext);
+    assert.strictEqual(res.status, 201, "handleCreateContact must return status 201");
+    assert.strictEqual(res.data.success, true);
+    assert.ok(executedSql.includes("contact_person"), "INSERT statement must include contact_person column");
+    assert.ok(executedArgs.includes("Test Contact"), "INSERT arguments must include contact name");
+  });
 });
+

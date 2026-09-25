@@ -63,81 +63,32 @@ Lekho-Edge/
 ├── SECURITY.md                        # Vulnerability reporting & security practices
 ├── package.json                       # Root developer entry point
 │
-└── v2/                                # Active Collectrr V2 Edge Application
+├── v2/                                # Springboard V2 Personal CRM Application
+│   ├── package.json                   # Edge worker package definition & test runner
+│   ├── wrangler.toml                  # Cloudflare Worker bindings
+│   ├── migrations/                    # D1 Database Migrations
+│   │   ├── 0001_personal_crm_schema.sql
+│   │   └── 0002_campaigns_and_templates.sql
+│   ├── src/                           # Backend Application Code (Hono, WhatsApp, Email, Queue)
+│   └── public/                        # Frontend Web Applications (Dashboard, Campaigns, Templates, Case Workspace)
+│
+├── doc-collection/                    # Dedicated Document Collection Platform
+│   ├── DOCUMENT_COLLECTION_SPEC.md    # Domain spec & 7 architectural contracts
+│   ├── package.json                   # Edge worker package definition & test runner
+│   ├── wrangler.toml                  # Cloudflare Worker & D1 bindings
+│   ├── migrations/                    # D1 Database Migrations (0001_initial_schema.sql)
+│   ├── src/                           # Backend Application Code (Hono, D1, R2, Queue)
+│   ├── public/                        # Reviewer Dashboard, Case Workspace & Magic Link Portal
+│   └── tests/                         # Offline In-Memory SQLite Test Suite (54 contract tests)
+│
+└── wedding-management/                # Dedicated Wedding Operations Platform
+    ├── WEDDING_MANAGEMENT_SPEC.md     # Domain spec & 8 architectural contracts (W1–W8)
     ├── package.json                   # Edge worker package definition & test runner
-    ├── wrangler.toml                  # Cloudflare Worker bindings
-    │
-    ├── migrations/                    # D1 Database Migrations
-    │   ├── 0001_personal_crm_schema.sql
-    │   └── 0002_campaigns_and_templates.sql
-    │
-    ├── src/                           # Backend Application Code
-    │   ├── index.js                   # Worker entrypoint, router dispatcher & scheduled/queue handlers
-    │   ├── middleware/
-    │   │   ├── auth.js                # JWT session verification & role enforcement
-    │   │   └── cors.js                # CORS headers & preflight handler
-    │   ├── api/                       # REST API controllers
-    │   │   ├── auth.js                # User authentication & registration
-    │   │   ├── contacts.js            # Contact CRUD, attention filters, and workspace loader
-    │   │   ├── conversations.js       # Outbound text & template dispatch controllers
-    │   │   ├── requests.js            # Generic request lifecycle & checklist items
-    │   │   ├── activities.js          # Activity logging and notes
-    │   │   ├── schedules.js           # Schedule creation, listing, cancellation & retry
-    │   │   ├── templates.js           # Full Template Manager (WhatsApp & Email template CRUD)
-    │   │   ├── campaigns.js           # Campaign creation, message linking, launch, schedule, cancel, telemetry
-    │   │   ├── credits.js             # Financial ledger, recharge wallet, paise math
-    │   │   ├── webhook.js             # Meta WhatsApp webhook verification & event ingestion + reply attribution
-    │   │   ├── session.js             # Magic link token session validation
-    │   │   ├── upload.js              # Presigned R2 uploads & direct uploads
-    │   │   └── admin.js               # System observability & failure analytics
-    │   ├── whatsapp/                  # Protected WhatsApp Transport Layer
-    │   │   ├── client.js              # Meta Graph API client & offline mock adapter
-    │   │   ├── templates.js           # Template registry & parameter interpolation
-    │   │   ├── pipeline.js            # Authoritative messaging pipeline with atomic locks & reservations
-    │   │   ├── window.js              # 24-hour Meta service window calculation
-    │   │   └── webhook.js             # Inbound payload parser & phone normalizer
-    │   ├── email/                     # Outbound Email Outreach Module (Resend)
-    │   │   ├── client.js              # Resend REST client with Idempotency-Key support & mock adapter
-    │   │   ├── templates.js           # Responsive HTML & plain-text email renderer
-    │   │   └── pipeline.js            # Authoritative email dispatch pipeline
-    │   ├── scheduler/                 # Asynchronous Scheduling & Campaign Queue Engine
-    │   │   ├── time.js                # Timezone conversion preserving IANA wall-clock times
-    │   │   ├── scanner.js             # Cron scanner for scheduled occurrences & due scheduled campaigns
-    │   │   └── consumer.js            # Queue consumer with campaign batching, direct messaging & credit isolation
-    │   └── db/
-    │       ├── client.js              # D1 client wrapper & compatibility driver
-    │       └── schema.sql             # Canonical Personal CRM database schema
-    │
-    ├── public/                        # Frontend Web Applications
-    │   ├── index.html                 # Marketing landing page
-    │   ├── dashboard.html             # Attention triage & contacts dashboard (/dashboard or /app)
-    │   ├── campaigns.html             # Outreach campaigns management, wizard, and real-time telemetry
-    │   ├── templates.html             # Message template management and device simulator
-    │   ├── case.html                  # Contact workspace (Conversation + Activity & Notes, Next Action recommendation card)
-    │   ├── upload.html                # Client upload session portal
-    │   ├── login.html, register.html, forgot-password.html # User authentication views
-    │   ├── css/                       # Stylesheets (dashboard.css, case.css, tokens.css)
-    │   └── js/                        # Frontend controllers (app.js, campaigns.js, templates.js, case-detail.js, login.js, register.js, forgot-password.js)
-    │
-    └── tests/                         # Node.js Test Suite (100% Offline Compatible)
-        ├── contact-model.test.js
-        ├── whatsapp-regression-gate.test.js
-        ├── whatsapp-workflow.test.js
-        ├── scheduling.test.js
-        ├── schedule-ui.test.js
-        ├── schema-parity.test.js
-        ├── status-filtering.test.js
-        ├── templates-ui.test.js
-        ├── templates-crud.test.js
-        ├── campaigns-and-templates.test.js
-        ├── route-auth.test.js
-        ├── credits.test.js
-        ├── email-outreach.test.js
-        ├── magic-link.test.js
-        ├── dom-integration.test.js
-        ├── frontend-syntax.test.js
-        ├── case-detail-status.test.js
-        └── bulk-import.test.js
+    ├── wrangler.toml                  # Cloudflare Worker & D1 bindings
+    ├── migrations/                    # D1 Database Migrations (0001_initial_schema.sql)
+    ├── src/                           # Backend Application Code (Hono, D1, R2, Queue)
+    ├── public/                        # Operations Cockpit, Couple & Vendor Portals
+    └── tests/                         # Offline In-Memory SQLite Test Suite (12 contract suites)
 ```
 
 ---

@@ -22,7 +22,7 @@ async function resolveMatchingContacts(db, userId, filter = {}) {
   const norm = normalizeAudienceFilter(filter);
   let sql = `
     SELECT 
-      c.id, c.user_id, c.name, c.phone_number, c.email, c.company, c.notes,
+      c.id, c.user_id, COALESCE(c.name, c.contact_person) as name, c.phone_number, c.email, c.company, c.notes,
       c.last_outbound_at, c.last_inbound_at, c.created_at
     FROM contacts c
     WHERE c.user_id = ?
@@ -36,7 +36,7 @@ async function resolveMatchingContacts(db, userId, filter = {}) {
   }
 
   if (norm.search) {
-    sql += ` AND (LOWER(c.name) LIKE ? OR c.phone_number LIKE ? OR LOWER(c.email) LIKE ?)`;
+    sql += ` AND (LOWER(COALESCE(c.name, c.contact_person, '')) LIKE ? OR c.phone_number LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ?)`;
     const sTerm = `%${norm.search}%`;
     args.push(sTerm, sTerm, sTerm);
   }

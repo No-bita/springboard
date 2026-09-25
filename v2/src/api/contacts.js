@@ -20,7 +20,7 @@ export async function handleGetContacts(c) {
   try {
     let sql = `
       SELECT 
-        c.id, c.user_id, c.name, c.phone_number, c.email, c.company, c.notes,
+        c.id, c.user_id, COALESCE(c.name, c.contact_person) as name, c.phone_number, c.email, c.company, c.notes,
         c.last_outbound_at, c.last_inbound_at, c.last_interaction_at,
         c.created_at, c.last_updated,
         conv.id as conversation_id, conv.unread_count, conv.last_message_at,
@@ -60,7 +60,7 @@ export async function handleGetContacts(c) {
     const args = [userId];
 
     if (search) {
-      sql += ` AND (LOWER(c.name) LIKE ? OR c.phone_number LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ? OR LOWER(COALESCE(c.company, '')) LIKE ?)`;
+      sql += ` AND (LOWER(COALESCE(c.name, c.contact_person, '')) LIKE ? OR c.phone_number LIKE ? OR LOWER(COALESCE(c.email, '')) LIKE ? OR LOWER(COALESCE(c.company, '')) LIKE ?)`;
       const s = `%${search}%`;
       args.push(s, s, s, s);
     }
@@ -185,7 +185,7 @@ export async function handleCreateContact(c) {
   const userId = user?.id || user?.user_id || user?.sub;
 
   const body = await c.req.json().catch(() => ({}));
-  const rawName = String(body.name || body.contactPerson || "").trim();
+  const rawName = String(body.name || body.contactPerson || body.contact_person || "").trim();
   const rawPhone = String(body.phone_number || body.phoneNumber || body.phone || body.mobile || "").trim();
   const email = body.email ? String(body.email).trim().toLowerCase() : null;
   const company = body.company ? String(body.company).trim() : null;
@@ -204,7 +204,7 @@ export async function handleCreateContact(c) {
 
   // Check unique contact for user
   const existing = await db.execute({
-    sql: "SELECT id, name FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
+    sql: "SELECT id, COALESCE(name, contact_person) as name FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
     args: [userId, canonicalPhone],
   });
 
@@ -221,9 +221,9 @@ export async function handleCreateContact(c) {
   try {
     // 1. Insert Contact
     await db.execute({
-      sql: `INSERT INTO contacts (id, user_id, name, phone_number, email, company, notes, created_at, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      args: [contactId, userId, rawName, canonicalPhone, email, company, notes],
+      sql: `INSERT INTO contacts (id, user_id, name, contact_person, phone_number, email, company, notes, created_at, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      args: [contactId, userId, rawName, rawName, canonicalPhone, email, company, notes],
     });
 
     // 2. Create Initial Conversation
@@ -511,7 +511,7 @@ export async function handleGetContactWorkspace(c) {
       success: true,
       contact: {
         id: contact.id,
-        name: contact.name,
+        name: contact.name || contact.contact_person,
         phoneNumber: contact.phone_number,
         email: contact.email,
         company: contact.company,
@@ -574,14 +574,14 @@ export async function handleUpdateContact(c) {
     }
 
     const current = contactRes.rows[0];
-    const updatedName = name !== undefined ? name : current.name;
+    const updatedName = name !== undefined ? name : (current.name || current.contact_person);
     const updatedEmail = email !== undefined ? email : current.email;
     const updatedCompany = company !== undefined ? company : current.company;
     const updatedNotes = notes !== undefined ? notes : current.notes;
 
     await db.execute({
-      sql: `UPDATE contacts SET name = ?, email = ?, company = ?, notes = ?, last_updated = datetime('now') WHERE id = ? AND user_id = ?`,
-      args: [updatedName, updatedEmail, updatedCompany, updatedNotes, contactId, userId],
+      sql: `UPDATE contacts SET name = ?, contact_person = ?, email = ?, company = ?, notes = ?, last_updated = datetime('now') WHERE id = ? AND user_id = ?`,
+      args: [updatedName, updatedName, updatedEmail, updatedCompany, updatedNotes, contactId, userId],
     });
 
     return c.json({ success: true, message: "Contact updated successfully" });
@@ -638,7 +638,7 @@ export async function handleCheckContactPhone(c) {
   }
 
   const res = await db.execute({
-    sql: "SELECT id, name, phone_number, email FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
+    sql: "SELECT id, COALESCE(name, contact_person) as name, phone_number, email FROM contacts WHERE user_id = ? AND phone_number = ? LIMIT 1",
     args: [userId, canonicalPhone],
   });
 

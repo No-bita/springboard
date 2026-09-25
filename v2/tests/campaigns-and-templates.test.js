@@ -128,9 +128,9 @@ test("Collectrr Campaigns Engine & Lifecycle Tests", async (t) => {
 
   for (const c of [contact1, contact2, contact3]) {
     await db.execute({
-      sql: `INSERT OR IGNORE INTO contacts (id, user_id, name, phone_number, email, company, created_at, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      args: [c.id, c.user_id, c.name, c.phone_number, c.email, c.company]
+      sql: `INSERT OR IGNORE INTO contacts (id, user_id, name, contact_person, phone_number, email, company, created_at, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      args: [c.id, c.user_id, c.name, c.name, c.phone_number, c.email, c.company]
     });
   }
 

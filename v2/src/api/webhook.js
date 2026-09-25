@@ -178,8 +178,8 @@ export async function handleWebhookEvent(c) {
         contactId = "cnt_" + crypto.randomUUID();
         contactName = msg.profileName || `Contact ${canonicalPhone.slice(-4)}`;
         await db.execute({
-          sql: "INSERT INTO contacts (id, user_id, name, phone_number, last_inbound_at, last_interaction_at, created_at, last_updated) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), datetime('now'))",
-          args: [contactId, userId, contactName, canonicalPhone]
+          sql: "INSERT INTO contacts (id, user_id, name, contact_person, phone_number, last_inbound_at, last_interaction_at, created_at, last_updated) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), datetime('now'))",
+          args: [contactId, userId, contactName, contactName, canonicalPhone]
         });
       }
 

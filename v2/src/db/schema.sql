@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   name TEXT NOT NULL,
+  contact_person TEXT DEFAULT '',
   phone_number TEXT NOT NULL, -- E.164 digits without leading '+' (e.g. 919876543210)
   email TEXT,
   company TEXT,

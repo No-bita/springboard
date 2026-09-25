@@ -308,11 +308,12 @@ export async function processCampaignRecipient(recipientId, env, db) {
     } else {
       contactId = `cnt_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
       await db.execute({
-        sql: `INSERT OR IGNORE INTO contacts (id, user_id, name, phone_number, email, company, created_at, last_updated)
-              VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        sql: `INSERT OR IGNORE INTO contacts (id, user_id, name, contact_person, phone_number, email, company, created_at, last_updated)
+              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
         args: [
           contactId,
           row.user_id,
+          row.recipient_name_snapshot,
           row.recipient_name_snapshot,
           row.phone_snapshot || "",
           row.email_snapshot || null,
