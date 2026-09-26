@@ -309,6 +309,13 @@ export async function handleGoogleStatus(c) {
     syncStep = 1;
   }
 
+  const toIsoUtc = (val) => {
+    if (!val) return null;
+    const s = String(val).trim();
+    if (s.endsWith("Z") || s.includes("+")) return s;
+    return s.replace(" ", "T") + "Z";
+  };
+
   return c.json({
     connected: true,
     connectionId: conn.id,
@@ -318,8 +325,8 @@ export async function handleGoogleStatus(c) {
     syncStageLabel,
     syncStep,
     totalSteps: 5,
-    lastSyncedAt: conn.last_synced_at,
-    lastSuccessfulSyncAt: conn.last_successful_sync_at,
+    lastSyncedAt: toIsoUtc(conn.last_synced_at),
+    lastSuccessfulSyncAt: toIsoUtc(conn.last_successful_sync_at),
     errorMessage: conn.sync_status === "error" ? conn.error_message : null,
     unmatchedCount: unmatchedRes.rows[0]?.cnt || 0,
   });

@@ -1180,6 +1180,27 @@ const GMAIL_STAGES = [
   { step: 5, key: "synced", label: "5. Synchronized" },
 ];
 
+function formatSyncTimestampIST(dateValue) {
+  if (!dateValue) return "";
+  let s = String(dateValue).trim();
+  if (!s.endsWith("Z") && !s.includes("+")) {
+    s = s.replace(" ", "T") + "Z";
+  }
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
+    }).format(d).replace(/([ap]m)/i, (m) => m.toUpperCase());
+  } catch (_) {
+    return d.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
+  }
+}
+
 function updateGmailStageBar(data) {
   const bar = el("gmailSyncStageBar");
   if (!bar) return;
@@ -1274,7 +1295,7 @@ function updateGmailStageBar(data) {
       stageCounter.style.color = "#1C8C5E";
     }
     if (stageDesc) {
-      const lastSyncStr = data.lastSuccessfulSyncAt ? " • Last sync: " + new Date(data.lastSuccessfulSyncAt).toLocaleTimeString() : "";
+      const lastSyncStr = data.lastSuccessfulSyncAt ? " • Last sync: " + formatSyncTimestampIST(data.lastSuccessfulSyncAt) : "";
       stageDesc.textContent = "Real-time inbox watch active" + lastSyncStr;
       stageDesc.style.color = "#6E6A62";
     }
