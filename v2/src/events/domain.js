@@ -38,9 +38,10 @@ export async function emitCollectrDomainEvent(db, event) {
   const eventKey = `msg_${messageId}_${direction}`;
 
   // 1. Idempotency Check: Verify if event has already been recorded in activities
+  const searchPattern = `"message_id":"${messageId}"`;
   const existingAct = await db.execute({
-    sql: `SELECT id FROM activities WHERE user_id = ? AND contact_id = ? AND metadata LIKE ? LIMIT 1`,
-    args: [userId, contactId, `%"message_id":"${messageId}"%`],
+    sql: `SELECT id FROM activities WHERE user_id = ? AND contact_id = ? AND instr(metadata, ?) > 0 LIMIT 1`,
+    args: [userId, contactId, searchPattern],
   });
 
   if (existingAct.rows && existingAct.rows.length > 0) {
