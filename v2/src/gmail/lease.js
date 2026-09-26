@@ -24,7 +24,8 @@ export async function acquireSyncLease(db, connectionId, leaseTtlSeconds = 120) 
     args: [leaseTtlSeconds, syncOwner, connectionId],
   });
 
-  const acquired = (res?.rowsAffected || 0) > 0;
+  const changes = res?.rowsAffected ?? res?.changes ?? res?.meta?.changes ?? 0;
+  const acquired = changes > 0;
   if (!acquired) {
     return { acquired: false };
   }
@@ -82,5 +83,5 @@ export async function extendSyncLease(db, connectionId, syncOwner, additionalSec
     args: [additionalSeconds, connectionId, syncOwner],
   });
 
-  return (res?.rowsAffected || 0) > 0;
+  return (res?.rowsAffected ?? res?.changes ?? res?.meta?.changes ?? 0) > 0;
 }

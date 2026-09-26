@@ -403,7 +403,7 @@ export async function processSingleGmailMessage(db, conn, gmailMsg, userContacts
     ],
   });
 
-  const messageInserted = (insertRes?.rowsAffected || 0) > 0;
+  const messageInserted = (insertRes?.rowsAffected ?? insertRes?.changes ?? insertRes?.meta?.changes ?? 0) > 0;
 
   // 5. Emit Durable Domain Event
   if (messageInserted) {

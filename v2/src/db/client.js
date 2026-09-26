@@ -33,12 +33,14 @@ export function getDbClient(env) {
       stmt = stmt.bind(...args);
     }
     const res = await stmt.all();
-    const rows = res.results || res.rows || [];
+    const rows = res?.results || res?.rows || [];
+    const changes = res?.meta?.changes ?? (res?.changes ?? (rows ? rows.length : 0));
     return {
       rows,
       results: rows,
-      meta: res.meta,
-      changes: res.meta?.changes ?? (res.changes ?? (rows ? rows.length : 0)),
+      meta: res?.meta,
+      changes,
+      rowsAffected: changes,
     };
   };
 
