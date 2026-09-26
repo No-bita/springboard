@@ -135,13 +135,19 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
       });
     }
 
-    for (const ref of messageRefs) {
-      try {
-        const fullMsg = await gmailGetMessage(accessToken, ref.id, "full", env);
-        await processSingleGmailMessage(db, conn, fullMsg, userContacts);
-      } catch (msgErr) {
-        console.error(`Failed to ingest message ${ref.id}:`, msgErr);
-      }
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < messageRefs.length; i += CHUNK_SIZE) {
+      const chunk = messageRefs.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map(async (ref) => {
+          try {
+            const fullMsg = await gmailGetMessage(accessToken, ref.id, "full", env);
+            await processSingleGmailMessage(db, conn, fullMsg, userContacts);
+          } catch (msgErr) {
+            console.error(`Failed to ingest message ${ref.id}:`, msgErr);
+          }
+        })
+      );
     }
 
     // 5. Check if more pages exist

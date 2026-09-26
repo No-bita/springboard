@@ -105,7 +105,7 @@ export async function handleGooglePubSubWebhook(c) {
       await executePushDeltaSync(db, connectionId, historyId, c.env);
     }
 
-    return c.text("EVENT_QUEUED", 204);
+    return c.text("EVENT_QUEUED", 200);
   } catch (err) {
     console.error("Google Pub/Sub Webhook processing error:", err);
     return c.text("WEBHOOK_ERROR", 500);
