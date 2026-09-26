@@ -248,6 +248,16 @@ export async function handleWebhookEvent(c) {
         ]
       });
 
+      // Advance active request to waiting_on_me & cancel pending follow-up if applicable
+      const activeReq = await db.execute({
+        sql: `SELECT id FROM requests WHERE user_id = ? AND contact_id = ? AND status IN ('waiting_on_them', 'needs_follow_up', 'open') ORDER BY updated_at DESC LIMIT 1`,
+        args: [userId, contactId],
+      });
+      if (activeReq.rows && activeReq.rows.length > 0) {
+        const { handleInboundRequestReply } = await import("./requests.js");
+        await handleInboundRequestReply(db, activeReq.rows[0].id, userId, contactId);
+      }
+
       // Update Contact Timestamps
       await db.execute({
         sql: "UPDATE contacts SET last_inbound_at = datetime('now'), last_interaction_at = datetime('now'), last_updated = datetime('now') WHERE id = ?",

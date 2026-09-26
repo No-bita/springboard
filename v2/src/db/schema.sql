@@ -436,3 +436,29 @@ CREATE INDEX IF NOT EXISTS idx_campaign_recipients_response ON campaign_recipien
 CREATE INDEX IF NOT EXISTS idx_campaign_recipients_user_phone ON campaign_recipients(user_id, phone_snapshot, channel, delivery_status);
 CREATE UNIQUE INDEX IF NOT EXISTS unq_campaign_recp_provider ON campaign_recipients(provider_message_id) WHERE provider_message_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_campaign_recipients_sending ON campaign_recipients(delivery_status, sending_started_at) WHERE delivery_status = 'sending';
+
+-- 16. Request Follow-Ups (1-Click Business Reminder Engine)
+CREATE TABLE IF NOT EXISTS request_follow_ups (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  scheduled_for_utc DATETIME NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'completed', 'cancelled', 'skipped')),
+  skip_reason TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  executed_at DATETIME,
+  cancelled_at DATETIME,
+
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS unq_active_request_follow_up
+ON request_follow_ups(request_id)
+WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_follow_ups_due
+ON request_follow_ups(status, scheduled_for_utc);

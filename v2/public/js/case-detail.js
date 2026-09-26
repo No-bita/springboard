@@ -416,6 +416,48 @@ function renderMessages(messages) {
   container.scrollTop = container.scrollHeight;
 }
 
+function formatFollowUpDisplay(scheduledUtc, preset) {
+  if (!scheduledUtc) return "";
+  if (preset === "tomorrow") return "Tomorrow 10:00 AM";
+  if (preset === "3_days") return "In 3 days";
+  if (preset === "next_week") return "Next week";
+  const d = new Date(scheduledUtc.replace(" ", "T") + (scheduledUtc.endsWith("Z") ? "" : "Z"));
+  return isNaN(d.getTime()) ? "Scheduled" : d.toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+async function scheduleRequestFollowUp(requestId, preset) {
+  try {
+    const res = await authFetch(`/api/requests/${requestId}/follow-up`, {
+      method: "POST",
+      body: JSON.stringify({ preset, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata" }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert("Failed to set follow-up: " + (data.error || "Unknown error"));
+      return;
+    }
+    await loadContactWorkspace();
+  } catch (err) {
+    alert("Error setting follow-up: " + err.message);
+  }
+}
+
+async function clearRequestFollowUp(requestId) {
+  try {
+    const res = await authFetch(`/api/requests/${requestId}/follow-up/clear`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert("Failed to clear follow-up: " + (data.error || "Unknown error"));
+      return;
+    }
+    await loadContactWorkspace();
+  } catch (err) {
+    alert("Error clearing follow-up: " + err.message);
+  }
+}
+
 function renderRequests(requests) {
   const container = el("requestsList");
   if (!container) return;
@@ -428,19 +470,56 @@ function renderRequests(requests) {
   container.innerHTML = requests.map(req => {
     const items = req.items || [];
     const itemsHtml = items.map(item => `
-      <label class="checklist-item ${item.is_completed ? 'done' : ''}">
-        <input type="checkbox" ${item.is_completed ? 'checked' : ''} onchange="toggleItem('${req.id}', '${item.id}', this.checked)" />
-        <span>${item.title}</span>
+      <label class="checklist-item ${item.status === 'done' || item.is_completed ? 'done' : ''}">
+        <input type="checkbox" ${item.status === 'done' || item.is_completed ? 'checked' : ''} onchange="toggleItem('${req.id}', '${item.id}', this.checked)" />
+        <span>${escapeHtml(item.title)}</span>
       </label>
     `).join("");
 
+    const isClosed = ["completed", "cancelled"].includes(req.status);
+    let followUpHtml = "";
+
+    if (!isClosed) {
+      if (req.followUp && req.followUp.status === "pending") {
+        const displayText = formatFollowUpDisplay(req.followUp.scheduled_for_utc, req.followUp.preset);
+        followUpHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ECE8DF; font-size: 12px;">
+            <span style="display: inline-flex; align-items: center; gap: 4px; color: #EA580C; font-weight: 500; background: #FFF7ED; padding: 2px 8px; border-radius: 6px;">
+              ⏰ Follow-up: ${displayText}
+            </span>
+            <div style="display: flex; gap: 6px;">
+              <select onchange="if(this.value){scheduleRequestFollowUp('${req.id}', this.value); this.value='';}" style="font-size: 11px; padding: 2px 6px; border: 1px solid #ECE8DF; border-radius: 4px; background: #FAF9F6; cursor: pointer;">
+                <option value="">Reschedule...</option>
+                <option value="tomorrow">Tomorrow</option>
+                <option value="3_days">In 3 days</option>
+                <option value="next_week">Next week</option>
+              </select>
+              <button type="button" onclick="clearRequestFollowUp('${req.id}')" style="font-size: 11px; padding: 2px 6px; border: 1px solid #ECE8DF; border-radius: 4px; background: #FAF9F6; color: #6E6A62; cursor: pointer;">Clear</button>
+            </div>
+          </div>
+        `;
+      } else {
+        followUpHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ECE8DF; font-size: 12px;">
+            <span style="color: #6E6A62;">Follow-up:</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" onclick="scheduleRequestFollowUp('${req.id}', 'tomorrow')" style="padding: 2px 8px; font-size: 11px; font-weight: 500; border: 1px solid #ECE8DF; border-radius: 4px; background: #FAF9F6; color: #171717; cursor: pointer;">Tomorrow</button>
+              <button type="button" onclick="scheduleRequestFollowUp('${req.id}', '3_days')" style="padding: 2px 8px; font-size: 11px; font-weight: 500; border: 1px solid #ECE8DF; border-radius: 4px; background: #FAF9F6; color: #171717; cursor: pointer;">3 days</button>
+              <button type="button" onclick="scheduleRequestFollowUp('${req.id}', 'next_week')" style="padding: 2px 8px; font-size: 11px; font-weight: 500; border: 1px solid #ECE8DF; border-radius: 4px; background: #FAF9F6; color: #171717; cursor: pointer;">Next week</button>
+            </div>
+          </div>
+        `;
+      }
+    }
+
     return `
-      <div class="request-card">
+      <div class="request-card" style="background: #ffffff; border: 1px solid #ECE8DF; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <strong style="font-size: 14px; color: #171717;">${req.title}</strong>
+          <strong style="font-size: 14px; color: #171717;">${escapeHtml(req.title)}</strong>
           <span style="font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #ECE8DF;">${(req.status || 'open').replace(/_/g, ' ')}</span>
         </div>
         <div>${itemsHtml || '<div style="font-size: 12px; color: #9CA3AF;">No items.</div>'}</div>
+        ${followUpHtml}
       </div>
     `;
   }).join("");
@@ -925,6 +1004,9 @@ if (typeof window !== "undefined") {
   window.submitReschedule = submitReschedule;
   window.formatShortDate = formatShortDate;
   window.getFirstName = getFirstName;
+  window.scheduleRequestFollowUp = scheduleRequestFollowUp;
+  window.clearRequestFollowUp = clearRequestFollowUp;
+  window.formatFollowUpDisplay = formatFollowUpDisplay;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

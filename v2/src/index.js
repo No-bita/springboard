@@ -20,6 +20,8 @@ import {
   handleUpdateRequestStatus,
   handleUpdateRequestItem,
   handleAddRequestItem,
+  handleSetRequestFollowUp,
+  handleClearRequestFollowUp,
 } from "./api/requests.js";
 import {
   handleGetContactActivities,
@@ -66,7 +68,7 @@ import { handleSessionRequest } from "./api/session.js";
 import { handleUploadUrlRequest, handleDirectUpload } from "./api/upload.js";
 import { handleBulkImportCases, handleBulkPrecheck } from "./api/cases.js";
 
-import { scanAndClaimDueOccurrences, scanAndRenewExpiringWatches } from "./scheduler/scanner.js";
+import { scanAndClaimDueOccurrences, scanAndRenewExpiringWatches, scanAndExecuteDueFollowUps } from "./scheduler/scanner.js";
 import { processScheduledOccurrence, handleQueueBatch } from "./scheduler/consumer.js";
 import { getDbClient } from "./db/client.js";
 import { authMiddleware, adminOnlyMiddleware } from "./middleware/auth.js";
@@ -172,6 +174,9 @@ app.post("/api/contacts/:id/requests", handleCreateRequest);
 app.patch("/api/requests/:id/status", handleUpdateRequestStatus);
 app.post("/api/requests/:id/items", handleAddRequestItem);
 app.patch("/api/requests/:requestId/items/:itemId", handleUpdateRequestItem);
+app.post("/api/requests/:id/follow-up", handleSetRequestFollowUp);
+app.post("/api/requests/:id/follow-up/clear", handleClearRequestFollowUp);
+app.delete("/api/requests/:id/follow-up", handleClearRequestFollowUp);
 
 // Activities Endpoints
 app.get("/api/contacts/:id/activities", handleGetContactActivities);
@@ -234,6 +239,7 @@ app.scheduled = async (event, env, ctx) => {
   try {
     await scanAndClaimDueOccurrences(db, env.SCHEDULE_QUEUE);
     await scanAndRenewExpiringWatches(db, env);
+    await scanAndExecuteDueFollowUps(db);
   } catch (err) {
     console.error("[CRON] Scanner execution error:", err);
   }

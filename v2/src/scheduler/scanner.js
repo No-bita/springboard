@@ -177,3 +177,104 @@ export async function scanAndRenewExpiringWatches(db, env = {}) {
     // Non-blocking catch
   }
 }
+
+/**
+ * Scans for due request follow-ups and transitions eligible requests to 'needs_follow_up'.
+ * Enforces race-safe conditional transitions and idempotent completion.
+ */
+export async function scanAndExecuteDueFollowUps(db, limit = 50) {
+  try {
+    // 1. Fetch due pending follow-ups
+    const dueRes = await db.execute({
+      sql: `SELECT id, request_id, user_id, contact_id, preset, scheduled_for_utc
+            FROM request_follow_ups
+            WHERE status = 'pending' AND scheduled_for_utc <= datetime('now')
+            ORDER BY scheduled_for_utc ASC
+            LIMIT ?`,
+      args: [limit],
+    });
+
+    const candidates = dueRes.rows || [];
+    let completedCount = 0;
+
+    for (const item of candidates) {
+      // 2. Atomic transition of follow-up record to completed
+      const claimRes = await db.execute({
+        sql: `UPDATE request_follow_ups
+              SET status = 'completed', completed_at = datetime('now'), updated_at = datetime('now')
+              WHERE id = ? AND status = 'pending'
+              RETURNING id`,
+        args: [item.id],
+      });
+
+      const isClaimed = (claimRes?.rows && claimRes.rows.length === 1) ||
+                        (claimRes?.changes === 1) ||
+                        (claimRes?.meta?.changes === 1) ||
+                        (claimRes?.rowsAffected === 1);
+
+      if (!isClaimed) {
+        continue;
+      }
+
+      completedCount++;
+
+      // 3. Inspect request state
+      const reqRes = await db.execute({
+        sql: `SELECT id, title, status FROM requests WHERE id = ? LIMIT 1`,
+        args: [item.request_id],
+      });
+
+      if (!reqRes.rows || reqRes.rows.length === 0) {
+        continue;
+      }
+
+      const req = reqRes.rows[0];
+
+      // 4. If request is waiting_on_them or open, transition to needs_follow_up
+      if (["waiting_on_them", "open"].includes(req.status)) {
+        const updateRes = await db.execute({
+          sql: `UPDATE requests 
+                SET status = 'needs_follow_up', updated_at = datetime('now')
+                WHERE id = ? AND status IN ('waiting_on_them', 'open')`,
+          args: [req.id],
+        });
+
+        const reqUpdated = (updateRes?.changes === 1) ||
+                           (updateRes?.meta?.changes === 1) ||
+                           (updateRes?.rowsAffected === 1);
+
+        if (reqUpdated) {
+          // Log Activity Event
+          const actId = "act_" + crypto.randomUUID();
+          await db.execute({
+            sql: `INSERT INTO activities (
+                    id, user_id, contact_id, request_id, activity_type, title, description, metadata, created_at
+                  ) VALUES (?, ?, ?, ?, 'request_needs_follow_up', 'Follow-Up Due', ?, ?, datetime('now'))`,
+            args: [
+              actId,
+              item.user_id,
+              item.contact_id,
+              item.request_id,
+              `Follow-up due for: ${req.title}`,
+              JSON.stringify({ followUpId: item.id, preset: item.preset, previousStatus: req.status }),
+            ],
+          });
+        }
+      } else if (["completed", "cancelled"].includes(req.status)) {
+        // Mark skip reason on the completed follow-up for audit trail
+        await db.execute({
+          sql: `UPDATE request_follow_ups SET skip_reason = ? WHERE id = ?`,
+          args: [req.status === "completed" ? "request_completed" : "request_cancelled", item.id],
+        });
+      }
+    }
+
+    return {
+      scanned: candidates.length,
+      completed: completedCount,
+    };
+  } catch (err) {
+    console.error("[SCHEDULER CRON] Error scanning due follow-ups:", err);
+    return { error: err.message };
+  }
+}

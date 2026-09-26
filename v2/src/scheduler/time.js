@@ -146,3 +146,30 @@ export function parseScheduledForToUtc(scheduledFor, timezone = "Asia/Kolkata") 
   if (!isNaN(d.getTime())) return toSqliteUtc(d);
   return toSqliteUtc(new Date());
 }
+
+/**
+ * Computes the target SQLite UTC timestamp for a request follow-up preset or custom date,
+ * strictly anchoring presets to 10:00:00 AM local wall-clock time in the configured timezone.
+ */
+export function computeFollowUpUtc(preset, customScheduledFor = null, timezone = "Asia/Kolkata") {
+  const safeTz = isValidTimezone(timezone) ? timezone : "Asia/Kolkata";
+  if (preset === "custom" || (!["tomorrow", "3_days", "next_week"].includes(preset) && customScheduledFor)) {
+    return parseScheduledForToUtc(customScheduledFor, safeTz);
+  }
+
+  const now = new Date();
+  const local = utcToLocalParts(now, safeTz);
+
+  let daysToAdd = 1;
+  if (preset === "3_days") daysToAdd = 3;
+  else if (preset === "next_week") daysToAdd = 7;
+
+  // Use Date.UTC to safely perform calendar arithmetic across month/year boundaries
+  const targetLocalDate = new Date(Date.UTC(local.year, local.month - 1, local.day + daysToAdd, 10, 0, 0));
+  const targetYear = targetLocalDate.getUTCFullYear();
+  const targetMonth = targetLocalDate.getUTCMonth() + 1;
+  const targetDay = targetLocalDate.getUTCDate();
+
+  const targetUtc = localToUtc(targetYear, targetMonth, targetDay, 10, 0, 0, safeTz);
+  return toSqliteUtc(targetUtc);
+}

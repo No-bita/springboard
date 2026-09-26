@@ -68,7 +68,9 @@ Lekho-Edge/
 │   ├── wrangler.toml                  # Cloudflare Worker bindings
 │   ├── migrations/                    # D1 Database Migrations
 │   │   ├── 0001_personal_crm_schema.sql
-│   │   └── 0002_campaigns_and_templates.sql
+│   │   ├── 0002_campaigns_and_templates.sql
+│   │   ├── 0003_gmail_integration.sql
+│   │   └── 0004_request_follow_ups.sql
 │   ├── src/                           # Backend Application Code (Hono, WhatsApp, Email, Queue)
 │   └── public/                        # Frontend Web Applications (Dashboard, Campaigns, Templates, Case Workspace)
 │
@@ -102,7 +104,8 @@ users
   │    ├── conversations (1 per contact per channel)
   │    │    └── messages (2-way conversation history & delivery status)
   │    ├── requests (Action items & tasks)
-  │    │    └── request_items (Checklist items)
+  │    │    ├── request_items (Checklist items)
+  │    │    └── request_follow_ups (Dedicated 1-click reminder engine; at most 1 active pending per request)
   │    ├── schedules (Automated recurring or one-off reminders)
   │    │    └── scheduled_occurrences (Claimed & processed by Cloudflare Queue)
   │    └── activities (Consolidated audit trail & internal notes)
@@ -150,6 +153,14 @@ Supporting Ledgers:
 - `GET /api/contacts/:id`: Returns full contact workspace, conversation stream, and requests.
 - `PATCH /api/contacts/:id`: Updates contact fields.
 - `DELETE /api/contacts/:id`: Deletes contact and cascade removes associated records.
+
+#### Requests & Follow-Ups
+- `POST /api/contacts/:id/requests`: Creates a request with optional checklist items.
+- `PATCH /api/requests/:id/status`: Updates request status (`open`, `waiting_on_them`, `needs_follow_up`, `waiting_on_me`, `completed`, `cancelled`).
+- `POST /api/requests/:id/items`: Adds a checklist item to a request.
+- `PATCH /api/requests/:requestId/items/:itemId`: Updates checklist item status (`pending`, `done`, `waived`).
+- `POST /api/requests/:id/follow-up`: Schedules 1-click follow-up reminder (`tomorrow`, `3_days`, `next_week`, `custom`), auto-transitions open request to `waiting_on_them`.
+- `POST /api/requests/:id/follow-up/clear`: Cancels active pending follow-up reminder.
 
 #### Message Templates
 - `GET /api/templates`: Lists all system and custom templates (with WhatsApp and Email configs).

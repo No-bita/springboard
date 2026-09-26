@@ -83,38 +83,21 @@ export async function emitCollectrDomainEvent(db, event) {
       args: [timestamp, timestamp, contactId],
     });
 
-    // 4. If deterministically matched to an active request, advance request state
-    if (requestId) {
-      const reqRes = await db.execute({
-        sql: `SELECT status, title FROM requests WHERE id = ? AND user_id = ? LIMIT 1`,
-        args: [requestId, userId],
+    // 4. If matched or active request exists, advance request state & cancel pending follow-up
+    let targetRequestId = requestId;
+    if (!targetRequestId) {
+      const activeReq = await db.execute({
+        sql: `SELECT id FROM requests WHERE user_id = ? AND contact_id = ? AND status IN ('waiting_on_them', 'needs_follow_up', 'open') ORDER BY updated_at DESC LIMIT 1`,
+        args: [userId, contactId],
       });
-
-      if (reqRes.rows && reqRes.rows.length > 0) {
-        const req = reqRes.rows[0];
-        if (["waiting_on_them", "needs_follow_up", "open"].includes(req.status)) {
-          await db.execute({
-            sql: `UPDATE requests SET status = 'waiting_on_me', updated_at = datetime('now') WHERE id = ?`,
-            args: [requestId],
-          });
-
-          // Log request status transition activity
-          const reqActId = "act_" + crypto.randomUUID();
-          await db.execute({
-            sql: `INSERT INTO activities (
-              id, user_id, contact_id, request_id, activity_type, title, description, metadata, created_at
-            ) VALUES (?, ?, ?, ?, 'request_status_updated', 'Request Waiting on Me (Gmail Reply)', ?, ?, datetime('now'))`,
-            args: [
-              reqActId,
-              userId,
-              contactId,
-              requestId,
-              `Reply received on request: ${req.title}`,
-              JSON.stringify({ previous_status: req.status, new_status: "waiting_on_me", trigger: "gmail_reply" }),
-            ],
-          });
-        }
+      if (activeReq.rows && activeReq.rows.length > 0) {
+        targetRequestId = activeReq.rows[0].id;
       }
+    }
+
+    if (targetRequestId) {
+      const { handleInboundRequestReply } = await import("../api/requests.js");
+      await handleInboundRequestReply(db, targetRequestId, userId, contactId);
     }
   } else {
     // Outbound email

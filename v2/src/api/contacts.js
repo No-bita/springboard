@@ -475,9 +475,14 @@ export async function handleGetContactWorkspace(c) {
         sql: "SELECT * FROM request_items WHERE request_id = ? ORDER BY order_index ASC",
         args: [req.id],
       });
+      const followUpRes = await db.execute({
+        sql: "SELECT id, preset, scheduled_for_utc, status, created_at FROM request_follow_ups WHERE request_id = ? AND status = 'pending' LIMIT 1",
+        args: [req.id],
+      }).catch(() => ({ rows: [] }));
       requests.push({
         ...req,
         items: itemsRes.rows || [],
+        followUp: followUpRes.rows?.[0] || null,
       });
     }
 
