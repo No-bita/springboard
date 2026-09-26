@@ -298,10 +298,18 @@ export async function handleGoogleStatus(c) {
     syncStage = "error";
     syncStageLabel = conn.error_message || "Synchronization issue encountered";
     syncStep = 0;
-  } else {
+  } else if (conn.last_successful_sync_at) {
     syncStage = "synced";
     syncStageLabel = "Real-time inbox watch active";
     syncStep = 5;
+  } else {
+    // Initial backfill has not completed yet: auto-trigger pipeline
+    syncStage = "scan";
+    syncStageLabel = "Initial inbox sync in progress...";
+    syncStep = 2;
+    try {
+      await startInitialSyncPipeline(db, conn.id, c.env);
+    } catch (_) {}
   }
 
   return c.json({
