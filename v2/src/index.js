@@ -66,11 +66,26 @@ import { handleSessionRequest } from "./api/session.js";
 import { handleUploadUrlRequest, handleDirectUpload } from "./api/upload.js";
 import { handleBulkImportCases, handleBulkPrecheck } from "./api/cases.js";
 
-import { scanAndClaimDueOccurrences } from "./scheduler/scanner.js";
+import { scanAndClaimDueOccurrences, scanAndRenewExpiringWatches } from "./scheduler/scanner.js";
 import { processScheduledOccurrence, handleQueueBatch } from "./scheduler/consumer.js";
 import { getDbClient } from "./db/client.js";
 import { authMiddleware, adminOnlyMiddleware } from "./middleware/auth.js";
 import { corsMiddleware } from "./middleware/cors.js";
+
+import {
+  handleGoogleAuthInitiate,
+  handleGoogleAuthCallback,
+  handleGoogleStatus,
+  handleGoogleDisconnect,
+  handleGoogleManualSync,
+} from "./api/integrations/google.js";
+import {
+  handleGetUnmatchedEmails,
+  handleLinkUnmatchedEmail,
+  handleCreateContactFromUnmatched,
+  handleIgnoreUnmatchedEmail,
+} from "./api/integrations/unmatched.js";
+import { handleGooglePubSubWebhook } from "./api/google-webhook.js";
 
 const app = new Hono();
 
@@ -99,9 +114,13 @@ app.get("/dd", handleGetAdminDashboard);
 // Health Check API
 app.get("/api/health", (c) => c.text("Springboard Personal CRM API Running"));
 
-// Public Webhook Routes (Meta WhatsApp)
+// Public Webhook Routes (Meta WhatsApp & Google PubSub)
 app.get("/api/webhook", handleWebhookVerify);
 app.post("/api/webhook", handleWebhookEvent);
+app.post("/api/webhooks/google/gmail", handleGooglePubSubWebhook);
+
+// Google OAuth Public Callback
+app.get("/api/integrations/google/callback", handleGoogleAuthCallback);
 
 // Public Upload & Session Routes
 app.get("/api/session/:token", handleSessionRequest);
@@ -120,8 +139,20 @@ app.use("/api/templates", authMiddleware);
 app.use("/api/templates/*", authMiddleware);
 app.use("/api/campaigns", authMiddleware);
 app.use("/api/campaigns/*", authMiddleware);
+app.use("/api/integrations/google", authMiddleware);
+app.use("/api/integrations/google/*", authMiddleware);
 app.use("/api/user/*", authMiddleware);
 app.use("/api/admin/*", authMiddleware, adminOnlyMiddleware);
+
+// Google Integration Endpoints
+app.get("/api/integrations/google/auth", handleGoogleAuthInitiate);
+app.get("/api/integrations/google/status", handleGoogleStatus);
+app.post("/api/integrations/google/disconnect", handleGoogleDisconnect);
+app.post("/api/integrations/google/sync", handleGoogleManualSync);
+app.get("/api/integrations/google/unmatched", handleGetUnmatchedEmails);
+app.post("/api/integrations/google/unmatched/:id/link", handleLinkUnmatchedEmail);
+app.post("/api/integrations/google/unmatched/:id/create-contact", handleCreateContactFromUnmatched);
+app.post("/api/integrations/google/unmatched/:id/ignore", handleIgnoreUnmatchedEmail);
 
 // Contacts Endpoints
 app.get("/api/contacts", handleGetContacts);
@@ -202,6 +233,7 @@ app.scheduled = async (event, env, ctx) => {
   const db = getDbClient(env);
   try {
     await scanAndClaimDueOccurrences(db, env.SCHEDULE_QUEUE);
+    await scanAndRenewExpiringWatches(db, env);
   } catch (err) {
     console.error("[CRON] Scanner execution error:", err);
   }

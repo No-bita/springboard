@@ -436,23 +436,24 @@ export async function handleGetContactWorkspace(c) {
 
     const contact = contactRes.rows[0];
 
-    // 2. Fetch Conversation & Messages
+    // 2. Fetch Conversation & Omnichannel Messages
     let conversation = null;
     let messages = [];
 
     const convRes = await db.execute({
-      sql: "SELECT * FROM conversations WHERE contact_id = ? AND channel = 'whatsapp' LIMIT 1",
+      sql: "SELECT * FROM conversations WHERE contact_id = ? ORDER BY CASE WHEN channel = 'whatsapp' THEN 1 ELSE 2 END ASC LIMIT 1",
       args: [contactId],
     });
 
     if (convRes.rows.length > 0) {
       conversation = convRes.rows[0];
-      const msgRes = await db.execute({
-        sql: "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
-        args: [conversation.id],
-      });
-      messages = msgRes.rows || [];
     }
+
+    const msgRes = await db.execute({
+      sql: "SELECT * FROM messages WHERE contact_id = ? ORDER BY created_at ASC",
+      args: [contactId],
+    });
+    messages = msgRes.rows || [];
 
     // 3. Fetch Requests & Items
     const reqRes = await db.execute({

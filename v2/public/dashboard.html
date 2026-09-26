@@ -35,12 +35,26 @@
         <div class="top-nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
           <a href="/admin/analytics" id="navAnalytics" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 13px; color: #6E6A62; text-decoration: none;">Analytics</a>
           <a href="/observability" id="navObservability" style="display: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 13px; color: #6E6A62; text-decoration: none;">Observability</a>
-          <!-- Billing / Credits concept commented out
-          <button type="button" id="userCreditBadge" onclick="openRechargeModal()" style="display: none; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 999px; padding: 0.35rem 0.875rem; font-size: 13px; font-weight: 600; color: #92400E; cursor: pointer; align-items: center; gap: 6px; transition: all 0.15s ease;" title="Click to view messaging credits & recharge">
-            <span style="font-size: 14px;">⚡</span>
-            <span id="creditBadgeText">₹9.00</span>
+
+          <!-- Billing / Credits badge (hidden) -->
+          <button type="button" id="userCreditBadge" onclick="openRechargeModal()" style="display: none;">
+            <span id="creditBadgeText">₹0.00</span>
           </button>
-          -->
+
+          <!-- Gmail Integration Badge & Controls -->
+          <a href="/api/integrations/google/auth" id="btnConnectGmail" style="display: inline-flex; align-items: center; gap: 6px; padding: 0.35rem 0.85rem; border-radius: 8px; font-size: 13px; font-weight: 500; color: #171717; background: #FAF9F6; border: 1px solid #ECE8DF; text-decoration: none;">
+            <span>Connect Gmail</span>
+          </a>
+
+          <div id="gmailConnectedBadge" style="display: none; align-items: center; gap: 6px; padding: 0.35rem 0.75rem; border-radius: 8px; font-size: 13px; background: #FAF9F6; border: 1px solid #ECE8DF;">
+            <span style="color: #EA4335; font-weight: 700; font-size: 12px;">G</span>
+            <span id="gmailAccountText" style="color: #171717; font-weight: 500; font-size: 13px;">Gmail</span>
+            <button type="button" onclick="triggerGmailManualSync()" title="Sync Gmail" style="border: none; background: transparent; cursor: pointer; color: #6E6A62; font-size: 13px; padding: 0 2px;">↻</button>
+          </div>
+
+          <span id="unmatchedBadge" style="display: none; padding: 0.35rem 0.65rem; border-radius: 999px; font-size: 12px; font-weight: 600; background: #FEF3C7; color: #92400E;">
+            Unmatched: <span id="unmatchedCount">0</span>
+          </span>
 
           <div style="position: relative;">
             <div class="sidebar-user" id="topUserContainer" onclick="toggleUserDropdown(event)" style="display: flex; align-items: center; gap: 0.625rem; padding: 0.35rem 0.875rem; background: #F4F3EF; border: 1px solid #ECE8DF; border-radius: 999px; cursor: pointer;" title="Account menu">

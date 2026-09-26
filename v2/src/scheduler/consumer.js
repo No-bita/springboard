@@ -7,6 +7,7 @@
 import { executeWhatsAppMessagingPipeline } from "../whatsapp/pipeline.js";
 import { executeEmailMessagingPipeline } from "../email/pipeline.js";
 import { MESSAGE_COST_PAISE } from "../whatsapp/pipeline.js";
+import { executeBackfillBatch, executePushDeltaSync } from "../gmail/sync.js";
 
 async function finalizeOneOffSchedule(db, scheduleId) {
   if (!scheduleId) return;
@@ -439,6 +440,18 @@ export async function handleQueueBatch(batch, env, ctx, db) {
         await processCampaignRecipient(body.recipient_id, env, db);
       } catch (err) {
         console.error(`[QUEUE CONSUMER] Error processing campaign recipient ${body.recipient_id}:`, err);
+      }
+    } else if (body.type === "GMAIL_BACKFILL_SYNC" && body.connectionId) {
+      try {
+        await executeBackfillBatch(db, body.connectionId, body, env);
+      } catch (err) {
+        console.error(`[QUEUE CONSUMER] Error processing Gmail backfill ${body.connectionId}:`, err);
+      }
+    } else if (body.type === "GMAIL_PUSH_SYNC" && body.connectionId) {
+      try {
+        await executePushDeltaSync(db, body.connectionId, body.historyId, env);
+      } catch (err) {
+        console.error(`[QUEUE CONSUMER] Error processing Gmail push sync ${body.connectionId}:`, err);
       }
     } else if (body.occurrenceId) {
       try {

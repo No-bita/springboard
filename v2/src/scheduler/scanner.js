@@ -142,3 +142,38 @@ export async function scanAndClaimDueOccurrences(db, queue = null, limit = 50, i
     items: claimedOccurrences
   };
 }
+
+/**
+ * Scans for Gmail connections approaching watch expiration and renews push subscriptions.
+ */
+export async function scanAndRenewExpiringWatches(db, env = {}) {
+  try {
+    const expiring = await db.execute({
+      sql: `SELECT id, google_email FROM google_connections
+            WHERE watch_expiration_at IS NOT NULL
+              AND watch_expiration_at <= datetime('now', '+24 hours')`,
+    });
+
+    const { getEphemeralAccessToken } = await import("../gmail/auth.js");
+    const { gmailWatch } = await import("../gmail/client.js");
+
+    for (const conn of expiring.rows || []) {
+      try {
+        const { accessToken } = await getEphemeralAccessToken(db, conn.id, env);
+        const topicName = env.GOOGLE_PUBSUB_TOPIC || "projects/springboard/topics/gmail-inbox-watch";
+        const watchRes = await gmailWatch(accessToken, topicName, env);
+        if (watchRes.expiration) {
+          const newExp = new Date(Number(watchRes.expiration)).toISOString();
+          await db.execute({
+            sql: "UPDATE google_connections SET watch_expiration_at = ?, updated_at = datetime('now') WHERE id = ?",
+            args: [newExp, conn.id],
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to renew watch for connection ${conn.id}:`, err);
+      }
+    }
+  } catch (err) {
+    // Non-blocking catch
+  }
+}

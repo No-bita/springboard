@@ -107,6 +107,55 @@ CREATE TABLE IF NOT EXISTS message_templates (
 CREATE UNIQUE INDEX IF NOT EXISTS unq_system_templates ON message_templates(name) WHERE user_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS unq_user_templates ON message_templates(user_id, name) WHERE user_id IS NOT NULL;
 
+-- 6b. Google Connections Ledger (No plaintext access_token, encrypted refresh_token at rest)
+CREATE TABLE IF NOT EXISTS google_connections (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  google_subject_id TEXT NOT NULL,
+  google_email TEXT NOT NULL,
+  encrypted_refresh_token TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  history_id TEXT,
+  watch_expiration_at DATETIME,
+  sync_lease_until DATETIME,
+  sync_owner TEXT,
+  last_synced_at DATETIME,
+  last_successful_sync_at DATETIME,
+  sync_status TEXT DEFAULT 'idle',
+  error_message TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT unq_global_google_email UNIQUE(google_email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_google_connections_user ON google_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_google_connections_lease ON google_connections(sync_lease_until);
+
+-- 6c. Unmatched Inbound Emails Ledger
+CREATE TABLE IF NOT EXISTS gmail_unmatched_messages (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  google_connection_id TEXT NOT NULL,
+  gmail_message_id TEXT NOT NULL,
+  gmail_thread_id TEXT NOT NULL,
+  from_email TEXT NOT NULL,
+  from_name TEXT,
+  to_emails JSON,
+  subject TEXT,
+  snippet TEXT,
+  received_at DATETIME NOT NULL,
+  status TEXT DEFAULT 'unresolved',
+  linked_contact_id TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(google_connection_id) REFERENCES google_connections(id) ON DELETE CASCADE,
+  FOREIGN KEY(linked_contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
+  CONSTRAINT unq_conn_unmatched_msg UNIQUE(google_connection_id, gmail_message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_gmail_unmatched_user_status ON gmail_unmatched_messages(user_id, status);
+
 -- 7. Messages (Product-level Conversation Record)
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
@@ -119,15 +168,19 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_type TEXT NOT NULL, -- 'user' | 'contact' | 'system'
   content TEXT,
   template_id TEXT, -- NULLABLE: References message_templates.id
-  provider TEXT NOT NULL DEFAULT 'meta_whatsapp', -- 'meta_whatsapp' | 'resend'
-  provider_message_id TEXT, -- e.g. wamid...
+  provider TEXT NOT NULL DEFAULT 'meta_whatsapp', -- 'meta_whatsapp' | 'resend' | 'gmail'
+  provider_message_id TEXT, -- e.g. wamid... or gmail_message_id
   delivery_status TEXT, -- NULL for inbound; 'queued' | 'sent' | 'delivered' | 'read' | 'failed' for outbound
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  google_connection_id TEXT,
+  subject TEXT,
+  thread_id TEXT,
   FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
   FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE SET NULL,
   FOREIGN KEY(template_id) REFERENCES message_templates(id) ON DELETE SET NULL,
+  FOREIGN KEY(google_connection_id) REFERENCES google_connections(id) ON DELETE SET NULL,
   CONSTRAINT chk_message_telemetry CHECK (
     (direction = 'inbound' AND delivery_status IS NULL) OR
     (direction = 'outbound' AND delivery_status IS NOT NULL)
@@ -136,6 +189,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at ASC);
 CREATE UNIQUE INDEX IF NOT EXISTS unq_messages_provider ON messages(provider, provider_message_id) WHERE provider_message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS unq_messages_conn_provider_msg ON messages(google_connection_id, provider_message_id) WHERE google_connection_id IS NOT NULL;
 
 -- 8. WhatsApp Transport & Idempotency Ledger
 CREATE TABLE IF NOT EXISTS whatsapp_messages (

@@ -1104,6 +1104,51 @@ function getDisplayStatus(contact, persona = 'crm') {
   return contact.status || 'lead';
 }
 
+// ----------------------------------------------------
+// GMAIL INTEGRATION
+// ----------------------------------------------------
+async function checkGmailStatus() {
+  try {
+    const res = await authFetch("/api/integrations/google/status");
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const btnConnect = el("btnConnectGmail");
+    const connectedBadge = el("gmailConnectedBadge");
+    const accountText = el("gmailAccountText");
+    const unmatchedBadge = el("unmatchedBadge");
+    const unmatchedCount = el("unmatchedCount");
+
+    if (data.connected) {
+      if (btnConnect) btnConnect.style.display = "none";
+      if (connectedBadge) connectedBadge.style.display = "flex";
+      if (accountText) accountText.textContent = data.googleEmail || "Connected";
+      if (data.unmatchedCount > 0 && unmatchedBadge) {
+        unmatchedBadge.style.display = "inline-flex";
+        if (unmatchedCount) unmatchedCount.textContent = String(data.unmatchedCount);
+      } else if (unmatchedBadge) {
+        unmatchedBadge.style.display = "none";
+      }
+    } else {
+      if (btnConnect) btnConnect.style.display = "inline-flex";
+      if (connectedBadge) connectedBadge.style.display = "none";
+      if (unmatchedBadge) unmatchedBadge.style.display = "none";
+    }
+  } catch (_) {}
+}
+
+async function triggerGmailManualSync() {
+  try {
+    const res = await authFetch("/api/integrations/google/sync", { method: "POST" });
+    if (res.ok) {
+      setTimeout(async () => {
+        await load();
+        await checkGmailStatus();
+      }, 1500);
+    }
+  } catch (_) {}
+}
+
 if (typeof window !== "undefined") {
   window.formatWhatsAppDeliveryStatus = formatWhatsAppDeliveryStatus;
   window.formatStatus = formatStatus;
@@ -1116,6 +1161,8 @@ if (typeof window !== "undefined") {
   window.handleBulkImport = handleBulkImport;
   window.toggleUserDropdown = toggleUserDropdown;
   window.handleLogout = handleLogout;
+  window.checkGmailStatus = checkGmailStatus;
+  window.triggerGmailManualSync = triggerGmailManualSync;
 }
 
 // ----------------------------------------------------
@@ -1131,5 +1178,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await fetchUserProfile();
   await fetchUserCredits();
+  await checkGmailStatus();
   await load();
 });

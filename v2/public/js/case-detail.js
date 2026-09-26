@@ -389,16 +389,23 @@ function renderMessages(messages) {
 
   container.innerHTML = messages.map(m => {
     const isOutbound = m.direction === "outbound";
-    const channelName = m.channel === "email" ? "Email" : "WhatsApp";
+    const isGmail = m.provider === "gmail" || m.channel === "email";
+    const channelName = isGmail ? "Gmail" : "WhatsApp";
+    const channelBadge = isGmail ? (isOutbound ? "Gmail · Sent" : "Gmail · Received") : "WhatsApp";
     const statusText = m.delivery_status ? ` · ${m.delivery_status}` : "";
     const timeStr = m.created_at
       ? new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
       : "";
 
+    const subjectHtml = m.subject
+      ? `<div style="font-weight: 600; font-size: 13px; margin-bottom: 4px; color: ${isOutbound ? '#ffffff' : '#171717'};">${escapeHtml(m.subject)}</div>`
+      : "";
+
     return `
-      <div class="chat-bubble ${isOutbound ? 'outbound' : 'inbound'}">
-        <div style="font-size: 11px; font-weight: 600; color: ${isOutbound ? '#6E6A62' : '#2563EB'}; margin-bottom: 2px;">${channelName}</div>
-        <div>${m.content || "—"}</div>
+      <div class="chat-bubble ${isOutbound ? 'outbound' : 'inbound'}" style="${isGmail ? 'border-left: 3px solid #EA4335;' : ''}">
+        <div style="font-size: 11px; font-weight: 600; color: ${isOutbound ? '#A3A3A3' : (isGmail ? '#DC2626' : '#2563EB')}; margin-bottom: 4px;">${channelBadge}</div>
+        ${subjectHtml}
+        <div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(m.content || "—")}</div>
         <div class="chat-meta">
           <span>${timeStr}${statusText}</span>
         </div>
