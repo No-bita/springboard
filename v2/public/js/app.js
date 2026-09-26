@@ -1168,9 +1168,157 @@ function showToast(message, type = "info", duration = 5000) {
 }
 
 // ----------------------------------------------------
-// GMAIL INTEGRATION
+// GMAIL INTEGRATION & STAGE PROGRESS TRACKING
 // ----------------------------------------------------
 let gmailPollingTimer = null;
+
+const GMAIL_STAGES = [
+  { step: 1, key: "auth", label: "1. Authorization" },
+  { step: 2, key: "watch", label: "2. Inbox Watch" },
+  { step: 3, key: "scan", label: "3. History Scan" },
+  { step: 4, key: "correlate", label: "4. Contact Match" },
+  { step: 5, key: "synced", label: "5. Synchronized" },
+];
+
+function updateGmailStageBar(data) {
+  const bar = el("gmailSyncStageBar");
+  if (!bar) return;
+
+  if (!data || !data.connected) {
+    bar.style.display = "none";
+    return;
+  }
+
+  const isDismissed = sessionStorage.getItem("gmail_stage_bar_dismissed") === "true";
+  const isSyncing = data.syncStatus === "syncing";
+  const isError = data.syncStatus === "error";
+
+  if (!isSyncing && !isError && isDismissed) {
+    bar.style.display = "none";
+    return;
+  }
+
+  bar.style.display = "block";
+
+  const stageIcon = el("stageStatusIcon");
+  const stageTitle = el("stageTitle");
+  const stageCounter = el("stageCounterPill");
+  const stageDesc = el("stageDescription");
+  const stepper = el("stageStepperContainer");
+  const progressBar = el("stageProgressBar");
+  const retryBtn = el("btnStageBarRetry");
+
+  const currentStep = data.syncStep || (data.syncStatus === "synced" ? 5 : 3);
+  const totalSteps = data.totalSteps || 5;
+
+  if (isError) {
+    if (stageIcon) {
+      stageIcon.style.background = "#FEE2E2";
+      stageIcon.style.color = "#DC2626";
+      stageIcon.innerHTML = "!";
+    }
+    if (stageTitle) stageTitle.textContent = "Gmail Synchronization Issue";
+    if (stageCounter) {
+      stageCounter.style.display = "none";
+    }
+    if (stageDesc) {
+      stageDesc.textContent = data.errorMessage || "Failed to synchronize inbox with Google.";
+      stageDesc.style.color = "#DC2626";
+    }
+    if (retryBtn) retryBtn.style.display = "inline-block";
+    if (progressBar) {
+      progressBar.style.width = "100%";
+      progressBar.style.background = "#DC2626";
+    }
+  } else if (isSyncing) {
+    if (stageIcon) {
+      stageIcon.style.background = "#FEF3C7";
+      stageIcon.style.color = "#92400E";
+      stageIcon.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;">⏳</span>';
+    }
+    if (stageTitle) stageTitle.textContent = "Synchronizing Gmail (" + (data.googleEmail || "Account") + ")";
+    if (stageCounter) {
+      stageCounter.style.display = "inline-block";
+      stageCounter.textContent = `Stage ${currentStep} of ${totalSteps}`;
+      stageCounter.style.background = "#FEF3C7";
+      stageCounter.style.color = "#92400E";
+    }
+    if (stageDesc) {
+      stageDesc.textContent = data.syncStageLabel || "Scanning historical emails (past 30 days)...";
+      stageDesc.style.color = "#6E6A62";
+    }
+    if (retryBtn) retryBtn.style.display = "none";
+    if (progressBar) {
+      const pct = Math.min(100, Math.max(15, (currentStep / totalSteps) * 100));
+      progressBar.style.width = pct + "%";
+      progressBar.style.background = "#D97706";
+    }
+  } else {
+    // Synced / Idle
+    if (stageIcon) {
+      stageIcon.style.background = "#E6F4ED";
+      stageIcon.style.color = "#1C8C5E";
+      stageIcon.innerHTML = "✓";
+    }
+    if (stageTitle) stageTitle.textContent = "Gmail Synchronized (" + (data.googleEmail || "Account") + ")";
+    if (stageCounter) {
+      stageCounter.style.display = "inline-block";
+      stageCounter.textContent = "Verified";
+      stageCounter.style.background = "#E6F4ED";
+      stageCounter.style.color = "#1C8C5E";
+    }
+    if (stageDesc) {
+      const lastSyncStr = data.lastSuccessfulSyncAt ? " • Last sync: " + new Date(data.lastSuccessfulSyncAt).toLocaleTimeString() : "";
+      stageDesc.textContent = "Real-time inbox watch active" + lastSyncStr;
+      stageDesc.style.color = "#6E6A62";
+    }
+    if (retryBtn) retryBtn.style.display = "none";
+    if (progressBar) {
+      progressBar.style.width = "100%";
+      progressBar.style.background = "#1C8C5E";
+    }
+  }
+
+  // Render stepper chips
+  if (stepper) {
+    stepper.innerHTML = "";
+    GMAIL_STAGES.forEach((st) => {
+      const chip = document.createElement("div");
+      chip.style.cssText = "font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px; transition: all 0.15s ease;";
+
+      if (isError && st.step === currentStep) {
+        chip.style.background = "#FEE2E2";
+        chip.style.color = "#DC2626";
+        chip.style.border = "1px solid #FECACA";
+        chip.textContent = "✕ " + st.label;
+      } else if (st.step < currentStep || (!isSyncing && !isError)) {
+        chip.style.background = "#E6F4ED";
+        chip.style.color = "#1C8C5E";
+        chip.style.border = "1px solid #D1FAE5";
+        chip.textContent = "✓ " + st.label;
+      } else if (st.step === currentStep && isSyncing) {
+        chip.style.background = "#171717";
+        chip.style.color = "#FFFFFF";
+        chip.style.fontWeight = "600";
+        chip.textContent = "● " + st.label;
+      } else {
+        chip.style.background = "#F4F3EF";
+        chip.style.color = "#A39E93";
+        chip.style.border = "1px solid #ECE8DF";
+        chip.textContent = "○ " + st.label;
+      }
+      stepper.appendChild(chip);
+    });
+  }
+}
+
+function dismissGmailStageBar() {
+  const bar = el("gmailSyncStageBar");
+  if (bar) {
+    bar.style.display = "none";
+    sessionStorage.setItem("gmail_stage_bar_dismissed", "true");
+  }
+}
 
 async function checkGmailStatus() {
   try {
@@ -1190,7 +1338,13 @@ async function checkGmailStatus() {
       if (connectedBadge) connectedBadge.style.display = "flex";
       if (accountText) accountText.textContent = data.googleEmail || "Connected";
 
-      // Sync state indicators
+      // Dedicated Stage Progress Bar below nav
+      if (data.syncStatus === "syncing") {
+        sessionStorage.removeItem("gmail_stage_bar_dismissed");
+      }
+      updateGmailStageBar(data);
+
+      // Sync state indicators on pill
       if (syncIndicator) {
         if (data.syncStatus === "syncing") {
           syncIndicator.style.display = "inline-block";
@@ -1202,7 +1356,7 @@ async function checkGmailStatus() {
             gmailPollingTimer = setTimeout(() => {
               gmailPollingTimer = null;
               checkGmailStatus();
-            }, 4000);
+            }, 3000);
           }
         } else if (data.syncStatus === "error") {
           syncIndicator.style.display = "inline-block";
@@ -1222,6 +1376,7 @@ async function checkGmailStatus() {
         unmatchedBadge.style.display = "none";
       }
     } else {
+      updateGmailStageBar({ connected: false });
       if (btnConnect) btnConnect.style.display = "inline-flex";
       if (connectedBadge) connectedBadge.style.display = "none";
       if (unmatchedBadge) unmatchedBadge.style.display = "none";
@@ -1236,18 +1391,35 @@ async function triggerGmailManualSync() {
     syncBtn.style.animation = "spin 1s linear infinite";
   }
 
+  sessionStorage.removeItem("gmail_stage_bar_dismissed");
+  updateGmailStageBar({
+    connected: true,
+    googleEmail: el("gmailAccountText")?.textContent || "Gmail",
+    syncStatus: "syncing",
+    syncStage: "scan",
+    syncStageLabel: "Scanning recent messages (past 30 days)...",
+    syncStep: 3,
+    totalSteps: 5,
+  });
+
   try {
     const res = await authFetch("/api/integrations/google/sync", { method: "POST" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       showToast(err.error || "Failed to trigger Gmail synchronization", "error");
+      updateGmailStageBar({
+        connected: true,
+        googleEmail: el("gmailAccountText")?.textContent || "Gmail",
+        syncStatus: "error",
+        errorMessage: err.error || "Failed to trigger synchronization",
+      });
       return;
     }
     showToast("Gmail synchronization started", "info", 3000);
     setTimeout(async () => {
       await load();
       await checkGmailStatus();
-    }, 2000);
+    }, 1500);
   } catch (err) {
     showToast("Sync error: " + err.message, "error");
   } finally {
@@ -1306,6 +1478,8 @@ if (typeof window !== "undefined") {
   window.triggerGmailManualSync = triggerGmailManualSync;
   window.initiateGoogleConnect = initiateGoogleConnect;
   window.showToast = showToast;
+  window.updateGmailStageBar = updateGmailStageBar;
+  window.dismissGmailStageBar = dismissGmailStageBar;
 }
 
 // ----------------------------------------------------
@@ -1328,6 +1502,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     showToast(oauthError, "error", 8000);
     window.history.replaceState({}, document.title, window.location.pathname);
   } else if (oauthConnected === "gmail") {
+    sessionStorage.removeItem("gmail_stage_bar_dismissed");
+    updateGmailStageBar({
+      connected: true,
+      syncStatus: "syncing",
+      syncStage: "watch",
+      syncStageLabel: "Setting up real-time inbox watch & baseline checkpoint...",
+      syncStep: 2,
+      totalSteps: 5,
+    });
     showToast("Gmail connected successfully! Starting email sync...", "success", 5000);
     window.history.replaceState({}, document.title, window.location.pathname);
   }

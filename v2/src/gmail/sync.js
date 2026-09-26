@@ -54,7 +54,7 @@ export async function startInitialSyncPipeline(db, connectionId, env = {}) {
 
   await db.execute({
     sql: `UPDATE google_connections 
-          SET history_id = ?, watch_expiration_at = ?, sync_status = 'syncing', updated_at = datetime('now')
+          SET history_id = ?, watch_expiration_at = ?, sync_status = 'syncing', error_message = 'stage:watch', updated_at = datetime('now')
           WHERE id = ?`,
     args: [baselineHistoryId, watchExpirationAt, connectionId],
   });
@@ -113,6 +113,11 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
     const userContacts = contactsRes.rows || [];
 
     // 3. List messages for this page
+    await db.execute({
+      sql: "UPDATE google_connections SET sync_status = 'syncing', error_message = 'stage:scan', updated_at = datetime('now') WHERE id = ?",
+      args: [connectionId],
+    });
+
     const afterEpochSeconds = Math.floor((boundaryTimestamp || (Date.now() - THIRTY_DAYS_MS)) / 1000);
     const listRes = await gmailListMessages(
       accessToken,
@@ -122,7 +127,14 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
 
     const messageRefs = listRes.messages || [];
 
-    // 4. Batch Fetch Message Details
+    // 4. Batch Fetch Message Details & Correlation
+    if (messageRefs.length > 0) {
+      await db.execute({
+        sql: "UPDATE google_connections SET sync_status = 'syncing', error_message = 'stage:correlate', updated_at = datetime('now') WHERE id = ?",
+        args: [connectionId],
+      });
+    }
+
     for (const ref of messageRefs) {
       try {
         const fullMsg = await gmailGetMessage(accessToken, ref.id, "full", env);
@@ -155,6 +167,10 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
     // 6. Step 3: Catch-Up Delta from Baseline H0
     let latestHistoryId = baselineHistoryId || conn.history_id;
     if (baselineHistoryId) {
+      await db.execute({
+        sql: "UPDATE google_connections SET sync_status = 'syncing', error_message = 'stage:catching_up_delta', updated_at = datetime('now') WHERE id = ?",
+        args: [connectionId],
+      });
       try {
         const deltaRes = await gmailListHistory(accessToken, { startHistoryId: baselineHistoryId }, env);
         const historyRecords = deltaRes.history || [];

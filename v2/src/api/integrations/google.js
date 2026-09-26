@@ -198,13 +198,14 @@ export async function handleGoogleAuthCallback(c) {
       await db.execute({
         sql: `INSERT INTO google_connections (
           id, user_id, google_subject_id, google_email, encrypted_refresh_token,
-          scope, sync_status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'syncing', datetime('now'), datetime('now'))
+          scope, sync_status, error_message, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'syncing', 'stage:watch', datetime('now'), datetime('now'))
         ON CONFLICT(google_email) DO UPDATE SET
           user_id = excluded.user_id,
           google_subject_id = excluded.google_subject_id,
           encrypted_refresh_token = excluded.encrypted_refresh_token,
           sync_status = 'syncing',
+          error_message = 'stage:watch',
           updated_at = datetime('now')`,
         args: [connectionId, userId, googleSubjectId, googleEmail, encryptedRefreshToken, GMAIL_SCOPES],
       });
@@ -263,14 +264,58 @@ export async function handleGoogleStatus(c) {
     args: [userId],
   });
 
+  let syncStage = "synced";
+  let syncStageLabel = "Inbox synchronized";
+  let syncStep = 5;
+
+  if (conn.sync_status === "syncing") {
+    const rawStage = (conn.error_message && conn.error_message.startsWith("stage:"))
+      ? conn.error_message.replace("stage:", "")
+      : "scan";
+
+    if (rawStage === "auth" || rawStage === "authorizing") {
+      syncStage = "auth";
+      syncStageLabel = "Authorizing Google OAuth & permissions";
+      syncStep = 1;
+    } else if (rawStage === "watch" || rawStage === "registering_watch") {
+      syncStage = "watch";
+      syncStageLabel = "Registering real-time inbox watch";
+      syncStep = 2;
+    } else if (rawStage === "scan" || rawStage === "scanning_history") {
+      syncStage = "scan";
+      syncStageLabel = "Scanning historical messages (past 30 days)";
+      syncStep = 3;
+    } else if (rawStage === "correlate" || rawStage === "correlating_contacts" || rawStage === "catching_up_delta") {
+      syncStage = "correlate";
+      syncStageLabel = "Matching emails & correlating requests";
+      syncStep = 4;
+    } else {
+      syncStage = "scan";
+      syncStageLabel = "Synchronizing inbox...";
+      syncStep = 3;
+    }
+  } else if (conn.sync_status === "error") {
+    syncStage = "error";
+    syncStageLabel = conn.error_message || "Synchronization issue encountered";
+    syncStep = 0;
+  } else {
+    syncStage = "synced";
+    syncStageLabel = "Real-time inbox watch active";
+    syncStep = 5;
+  }
+
   return c.json({
     connected: true,
     connectionId: conn.id,
     googleEmail: conn.google_email,
     syncStatus: conn.sync_status,
+    syncStage,
+    syncStageLabel,
+    syncStep,
+    totalSteps: 5,
     lastSyncedAt: conn.last_synced_at,
     lastSuccessfulSyncAt: conn.last_successful_sync_at,
-    errorMessage: conn.error_message,
+    errorMessage: conn.sync_status === "error" ? conn.error_message : null,
     unmatchedCount: unmatchedRes.rows[0]?.cnt || 0,
   });
 }
@@ -325,6 +370,10 @@ export async function handleGoogleManualSync(c) {
   }
 
   const connectionId = res.rows[0].id;
+  await db.execute({
+    sql: "UPDATE google_connections SET sync_status = 'syncing', error_message = 'stage:scan', updated_at = datetime('now') WHERE id = ?",
+    args: [connectionId],
+  });
   await startInitialSyncPipeline(db, connectionId, c.env);
 
   return c.json({ success: true, message: "Synchronization started." });
