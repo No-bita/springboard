@@ -134,7 +134,7 @@ Supporting Ledgers:
 
 #### Gmail Read-Only Connectivity & Integrations
 - `GET /api/integrations/google/auth`: Initiates PKCE OAuth authorization flow (`Authorization: Bearer <jwt>`), sets HttpOnly PKCE cookie, and returns `{ authorizationUrl }` JSON for client-side navigation.
-- `GET /api/integrations/google/callback`: Verifies state, exchanges code, encrypts refresh token, and starts watch-before-backfill sync.
+- `GET /api/integrations/google/callback`: Verifies state, exchanges code, encrypts refresh token, starts watch-before-backfill sync, and redirects gracefully to `/dashboard.html?connected=gmail` or `/dashboard.html?error=...`.
 - `GET /api/integrations/google/status`: Returns connection status, connected email, and unmatched message counter.
 - `POST /api/integrations/google/disconnect`: Revokes Google token and deletes connection.
 - `POST /api/integrations/google/sync`: Manually triggers synchronization.

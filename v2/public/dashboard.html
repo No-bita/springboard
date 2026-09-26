@@ -49,7 +49,8 @@
           <div id="gmailConnectedBadge" style="display: none; align-items: center; gap: 6px; padding: 0.35rem 0.75rem; border-radius: 8px; font-size: 13px; background: #FAF9F6; border: 1px solid #ECE8DF;">
             <span style="color: #EA4335; font-weight: 700; font-size: 12px;">G</span>
             <span id="gmailAccountText" style="color: #171717; font-weight: 500; font-size: 13px;">Gmail</span>
-            <button type="button" onclick="triggerGmailManualSync()" title="Sync Gmail" style="border: none; background: transparent; cursor: pointer; color: #6E6A62; font-size: 13px; padding: 0 2px;">↻</button>
+            <span id="gmailSyncIndicator" style="display: none; font-size: 11px; color: #D97706; background: #FEF3C7; padding: 2px 6px; border-radius: 4px; font-weight: 500;">Syncing</span>
+            <button type="button" id="btnSyncGmail" onclick="triggerGmailManualSync()" title="Sync Gmail" style="border: none; background: transparent; cursor: pointer; color: #6E6A62; font-size: 13px; padding: 0 2px;">↻</button>
           </div>
 
           <span id="unmatchedBadge" style="display: none; padding: 0.35rem 0.65rem; border-radius: 999px; font-size: 12px; font-weight: 600; background: #FEF3C7; color: #92400E;">
@@ -378,8 +379,15 @@
         <button type="button" id="btnExecuteRecharge" onclick="closeRechargeModal()" style="width: 100%; padding: 12px; background: #171717; color: #ffffff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Close</button>
       </div>
     </div>
-
   </div>
+
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <div id="toastContainer" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 420px;"></div>
 
   <script src="/js/app.js?v=4.0"></script>
 </body>

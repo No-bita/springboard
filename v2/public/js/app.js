@@ -1107,8 +1107,71 @@ function getDisplayStatus(contact, persona = 'crm') {
 }
 
 // ----------------------------------------------------
+// ----------------------------------------------------
+// TOAST NOTIFICATIONS & FEEDBACK
+// ----------------------------------------------------
+function showToast(message, type = "info", duration = 5000) {
+  let container = el("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.style.cssText = "position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 420px;";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.style.cssText = "pointer-events: auto; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); transform: translateY(12px); opacity: 0; transition: transform 0.2s ease, opacity 0.2s ease;";
+
+  if (type === "error") {
+    toast.style.background = "#FEF2F2";
+    toast.style.color = "#991B1B";
+    toast.style.border = "1px solid #FEE2E2";
+  } else if (type === "success") {
+    toast.style.background = "#ECFDF5";
+    toast.style.color = "#065F46";
+    toast.style.border = "1px solid #D1FAE5";
+  } else {
+    toast.style.background = "#18181B";
+    toast.style.color = "#FAFAFA";
+    toast.style.border = "1px solid #27272A";
+  }
+
+  const textSpan = document.createElement("span");
+  textSpan.textContent = message;
+  toast.appendChild(textSpan);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.innerHTML = "✕";
+  closeBtn.style.cssText = "border: none; background: transparent; cursor: pointer; font-size: 14px; opacity: 0.6; color: inherit; padding: 0 2px;";
+  closeBtn.onclick = () => removeToast(toast);
+  toast.appendChild(closeBtn);
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.transform = "translateY(0)";
+    toast.style.opacity = "1";
+  });
+
+  function removeToast(elem) {
+    elem.style.transform = "translateY(12px)";
+    elem.style.opacity = "0";
+    setTimeout(() => elem.remove(), 250);
+  }
+
+  if (duration > 0) {
+    setTimeout(() => {
+      if (toast.parentElement) removeToast(toast);
+    }, duration);
+  }
+}
+
+// ----------------------------------------------------
 // GMAIL INTEGRATION
 // ----------------------------------------------------
+let gmailPollingTimer = null;
+
 async function checkGmailStatus() {
   try {
     const res = await authFetch("/api/integrations/google/status");
@@ -1118,6 +1181,7 @@ async function checkGmailStatus() {
     const btnConnect = el("btnConnectGmail");
     const connectedBadge = el("gmailConnectedBadge");
     const accountText = el("gmailAccountText");
+    const syncIndicator = el("gmailSyncIndicator");
     const unmatchedBadge = el("unmatchedBadge");
     const unmatchedCount = el("unmatchedCount");
 
@@ -1125,6 +1189,32 @@ async function checkGmailStatus() {
       if (btnConnect) btnConnect.style.display = "none";
       if (connectedBadge) connectedBadge.style.display = "flex";
       if (accountText) accountText.textContent = data.googleEmail || "Connected";
+
+      // Sync state indicators
+      if (syncIndicator) {
+        if (data.syncStatus === "syncing") {
+          syncIndicator.style.display = "inline-block";
+          syncIndicator.textContent = "Syncing...";
+          syncIndicator.style.background = "#FEF3C7";
+          syncIndicator.style.color = "#92400E";
+          // Poll until sync finishes
+          if (!gmailPollingTimer) {
+            gmailPollingTimer = setTimeout(() => {
+              gmailPollingTimer = null;
+              checkGmailStatus();
+            }, 4000);
+          }
+        } else if (data.syncStatus === "error") {
+          syncIndicator.style.display = "inline-block";
+          syncIndicator.textContent = "Sync Issue";
+          syncIndicator.style.background = "#FEE2E2";
+          syncIndicator.style.color = "#991B1B";
+          syncIndicator.title = data.errorMessage || "Synchronization error";
+        } else {
+          syncIndicator.style.display = "none";
+        }
+      }
+
       if (data.unmatchedCount > 0 && unmatchedBadge) {
         unmatchedBadge.style.display = "inline-flex";
         if (unmatchedCount) unmatchedCount.textContent = String(data.unmatchedCount);
@@ -1140,15 +1230,31 @@ async function checkGmailStatus() {
 }
 
 async function triggerGmailManualSync() {
+  const syncBtn = el("btnSyncGmail");
+  if (syncBtn) {
+    syncBtn.style.display = "inline-block";
+    syncBtn.style.animation = "spin 1s linear infinite";
+  }
+
   try {
     const res = await authFetch("/api/integrations/google/sync", { method: "POST" });
-    if (res.ok) {
-      setTimeout(async () => {
-        await load();
-        await checkGmailStatus();
-      }, 1500);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Failed to trigger Gmail synchronization", "error");
+      return;
     }
-  } catch (_) {}
+    showToast("Gmail synchronization started", "info", 3000);
+    setTimeout(async () => {
+      await load();
+      await checkGmailStatus();
+    }, 2000);
+  } catch (err) {
+    showToast("Sync error: " + err.message, "error");
+  } finally {
+    if (syncBtn) {
+      syncBtn.style.animation = "";
+    }
+  }
 }
 
 async function initiateGoogleConnect() {
@@ -1163,18 +1269,18 @@ async function initiateGoogleConnect() {
     const res = await authFetch("/api/integrations/google/auth");
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "Unable to start Gmail connection. Please log in again.");
+      showToast(err.error || "Unable to start Gmail connection. Please log in again.", "error");
       return;
     }
     const data = await res.json();
     if (data.authorizationUrl) {
       window.location.assign(data.authorizationUrl);
     } else {
-      alert("Failed to obtain Google authorization URL.");
+      showToast("Failed to obtain Google authorization URL.", "error");
     }
   } catch (err) {
     if (err.message !== "Authentication required" && err.message !== "Session expired. Please log in again.") {
-      alert("Error initiating Gmail connection: " + err.message);
+      showToast("Error initiating Gmail connection: " + err.message, "error");
     }
   } finally {
     if (btn) {
@@ -1199,6 +1305,7 @@ if (typeof window !== "undefined") {
   window.checkGmailStatus = checkGmailStatus;
   window.triggerGmailManualSync = triggerGmailManualSync;
   window.initiateGoogleConnect = initiateGoogleConnect;
+  window.showToast = showToast;
 }
 
 // ----------------------------------------------------
@@ -1210,6 +1317,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     searchInput.addEventListener("input", () => {
       renderTable();
     });
+  }
+
+  // Gracefully handle OAuth callback parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthError = urlParams.get("error");
+  const oauthConnected = urlParams.get("connected");
+
+  if (oauthError) {
+    showToast(oauthError, "error", 8000);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (oauthConnected === "gmail") {
+    showToast("Gmail connected successfully! Starting email sync...", "success", 5000);
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 
   await fetchUserProfile();

@@ -24,50 +24,55 @@ const GMAIL_SCOPES = "https://www.googleapis.com/auth/gmail.readonly https://www
  * Initiates PKCE OAuth flow.
  */
 export async function handleGoogleAuthInitiate(c) {
-  const user = c.get("user");
-  const userId = user?.id || user?.user_id || user?.sub;
-  if (!userId) {
-    return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const user = c.get("user");
+    const userId = user?.id || user?.user_id || user?.sub;
+    if (!userId) {
+      return c.json({ error: "Unauthorized access. Please log in." }, 401);
+    }
+
+    const clientId = c.env.GOOGLE_CLIENT_ID || "mock_google_client_id";
+    const frontendUrl = c.env.FRONTEND_URL || "https://crm.aaryanshah.co.in";
+    const redirectUri = `${frontendUrl}/api/integrations/google/callback`;
+    const secretKey = c.env.ENCRYPTION_SECRET || c.env.JWT_SECRET || "collectr_dev_secret_key_32_bytes!!";
+
+    // 1. Generate PKCE pair
+    const { codeVerifier, codeChallenge } = await generatePkcePair();
+
+    // 2. Generate HMAC-signed state containing only { user_id, nonce, issued_at }
+    const statePayload = {
+      user_id: userId,
+      nonce: crypto.randomUUID(),
+      issued_at: Date.now(),
+    };
+    const signedState = await signOAuthState(statePayload, secretKey);
+
+    // 3. Store code_verifier in secure HttpOnly cookie
+    const isSecure = !frontendUrl.startsWith("http://localhost");
+    const cookieHeader = `sb_pkce_verifier=${encodeURIComponent(codeVerifier)}; HttpOnly; SameSite=Lax; Path=/api/integrations/google; Max-Age=600${isSecure ? "; Secure" : ""}`;
+
+    // 4. Construct Google consent URL
+    const authParams = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: GMAIL_SCOPES,
+      access_type: "offline",
+      prompt: "consent",
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+      state: signedState,
+    });
+
+    const authorizationUrl = `${GOOGLE_AUTH_ENDPOINT}?${authParams.toString()}`;
+
+    // Set PKCE cookie and return authorizationUrl JSON for client-side navigation
+    c.header("Set-Cookie", cookieHeader);
+    return c.json({ authorizationUrl });
+  } catch (err) {
+    console.error("Google auth initiate error:", err);
+    return c.json({ error: "Failed to initiate Google connection: " + (err.message || "Unknown error") }, 500);
   }
-
-  const clientId = c.env.GOOGLE_CLIENT_ID || "mock_google_client_id";
-  const frontendUrl = c.env.FRONTEND_URL || "https://crm.aaryanshah.co.in";
-  const redirectUri = `${frontendUrl}/api/integrations/google/callback`;
-  const secretKey = c.env.ENCRYPTION_SECRET || c.env.JWT_SECRET || "collectr_dev_secret_key_32_bytes!!";
-
-  // 1. Generate PKCE pair
-  const { codeVerifier, codeChallenge } = await generatePkcePair();
-
-  // 2. Generate HMAC-signed state containing only { user_id, nonce, issued_at }
-  const statePayload = {
-    user_id: userId,
-    nonce: crypto.randomUUID(),
-    issued_at: Date.now(),
-  };
-  const signedState = await signOAuthState(statePayload, secretKey);
-
-  // 3. Store code_verifier in secure HttpOnly cookie
-  const isSecure = !frontendUrl.startsWith("http://localhost");
-  const cookieHeader = `sb_pkce_verifier=${encodeURIComponent(codeVerifier)}; HttpOnly; SameSite=Lax; Path=/api/integrations/google; Max-Age=600${isSecure ? "; Secure" : ""}`;
-
-  // 4. Construct Google consent URL
-  const authParams = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: GMAIL_SCOPES,
-    access_type: "offline",
-    prompt: "consent",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    state: signedState,
-  });
-
-  const authorizationUrl = `${GOOGLE_AUTH_ENDPOINT}?${authParams.toString()}`;
-
-  // Set PKCE cookie and return authorizationUrl JSON for client-side navigation
-  c.header("Set-Cookie", cookieHeader);
-  return c.json({ authorizationUrl });
 }
 
 /**
@@ -89,22 +94,25 @@ export async function handleGoogleAuthCallback(c) {
     const error = c.req.query("error");
 
     if (error) {
-      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Google connection cancelled: " + error)}`);
+      const errorMsg = error === "access_denied"
+        ? "Google permissions were not granted. Please allow access to connect Gmail."
+        : `Google connection cancelled: ${error}`;
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent(errorMsg)}`);
     }
 
     if (!code || !signedState) {
-      return c.json({ error: "Missing authorization code or state parameter." }, 400);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Missing authorization code or state from Google. Please try again.")}`);
     }
 
     // 1. Verify signed state
     const statePayload = await verifyOAuthState(signedState, secretKey);
     if (!statePayload || !statePayload.user_id) {
-      return c.json({ error: "Invalid or expired OAuth state parameter." }, 400);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Invalid or tampered authorization state. Please try connecting again.")}`);
     }
 
     const stateAge = Date.now() - Number(statePayload.issued_at || 0);
     if (stateAge > 10 * 60 * 1000) {
-      return c.json({ error: "OAuth session timed out. Please try connecting again." }, 400);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Connection session timed out. Please try connecting again.")}`);
     }
 
     const userId = statePayload.user_id;
@@ -120,7 +128,7 @@ export async function handleGoogleAuthCallback(c) {
     }
 
     if (!codeVerifier && !isMock) {
-      return c.json({ error: "PKCE verification failed: verifier cookie missing or expired." }, 400);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Security verification cookie missing or expired. Please ensure cookies are enabled and try again.")}`);
     }
 
     let plainRefreshToken = "mock_refresh_token_xyz";
@@ -145,8 +153,19 @@ export async function handleGoogleAuthCallback(c) {
       });
 
       if (!tokenRes.ok) {
-        const errText = await tokenRes.text().catch(() => "");
-        return c.redirect(`/dashboard.html?error=${encodeURIComponent("Token exchange failed: " + errText)}`);
+        let errDesc = "Token exchange failed with Google";
+        try {
+          const errJson = await tokenRes.json();
+          if (errJson.error === "invalid_grant") {
+            errDesc = "Authorization code expired or was already used. Please reconnect.";
+          } else if (errJson.error_description) {
+            errDesc = errJson.error_description;
+          }
+        } catch (_) {
+          const rawText = await tokenRes.text().catch(() => "");
+          if (rawText) errDesc += `: ${rawText}`;
+        }
+        return c.redirect(`/dashboard.html?error=${encodeURIComponent(errDesc)}`);
       }
 
       const tokenData = await tokenRes.json();
@@ -158,7 +177,7 @@ export async function handleGoogleAuthCallback(c) {
       });
 
       if (!userinfoRes.ok) {
-        return c.redirect(`/dashboard.html?error=${encodeURIComponent("Failed to fetch Google user profile")}`);
+        return c.redirect(`/dashboard.html?error=${encodeURIComponent("Failed to load Google user profile. Please try reconnecting.")}`);
       }
 
       const profile = await userinfoRes.json();
@@ -167,7 +186,7 @@ export async function handleGoogleAuthCallback(c) {
     }
 
     if (!plainRefreshToken) {
-      return c.redirect(`/dashboard.html?error=${encodeURIComponent("No refresh token received from Google. Please reconnect with consent prompt.")}`);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Google did not return an offline access token. Please reconnect and approve the consent prompt.")}`);
     }
 
     // 5. Encrypt refresh token using AES-GCM-256
