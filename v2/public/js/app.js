@@ -193,11 +193,12 @@ async function load() {
 
     const data = await res.json();
     allContacts = data.contacts || data.cases || [];
-    attentionStats = data.counts || {
-      attention: 0,
-      needs_follow_up: 0,
-      waiting_on_them: 0,
-      recently_replied: 0
+    const rawCounts = data.attentionCounts || data.counts || {};
+    attentionStats = {
+      attention: rawCounts.needsAttention ?? rawCounts.attention ?? 0,
+      needs_follow_up: rawCounts.needsFollowUp ?? rawCounts.needs_follow_up ?? 0,
+      waiting_on_them: rawCounts.waitingOnThem ?? rawCounts.waiting_on_them ?? 0,
+      recently_replied: rawCounts.recentlyReplied ?? rawCounts.recently_replied ?? 0,
     };
 
     updateTriageCards();

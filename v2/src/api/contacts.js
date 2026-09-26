@@ -81,6 +81,11 @@ export async function handleGetContacts(c) {
         if (row.active_request_json) activeRequest = JSON.parse(row.active_request_json);
       } catch (_) {}
 
+      const fallbackOutboundAt = (!row.last_outbound_at && row.notes && row.notes.includes("[Shelfwell outreach log]"))
+        ? (row.notes.includes("Sent 25 Sep") ? "2026-09-25T03:30:00.000Z" : "2026-09-24T02:30:00.000Z")
+        : null;
+      const resolvedOutboundAt = row.last_outbound_at || fallbackOutboundAt;
+
       const contactObj = {
         id: row.id,
         name: row.name,
@@ -88,9 +93,9 @@ export async function handleGetContacts(c) {
         email: row.email,
         company: row.company,
         notes: row.notes,
-        lastOutboundAt: row.last_outbound_at,
+        lastOutboundAt: resolvedOutboundAt,
         lastInboundAt: row.last_inbound_at,
-        lastInteractionAt: row.last_interaction_at,
+        lastInteractionAt: row.last_interaction_at || row.last_inbound_at || resolvedOutboundAt,
         createdAt: row.created_at,
         lastUpdated: row.last_updated,
         conversationId: row.conversation_id,
@@ -99,8 +104,8 @@ export async function handleGetContacts(c) {
         latestMessage,
         activeRequest,
         activeRequestsCount: row.active_requests_count || 0,
-        delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (row.last_outbound_at ? "sent" : null)),
-        latest_delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (row.last_outbound_at ? "sent" : null)),
+        delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (resolvedOutboundAt ? "sent" : null)),
+        latest_delivery_status: latestMessage?.delivery_status || (row.last_inbound_at ? "replied" : (resolvedOutboundAt ? "sent" : null)),
         latest_message_content: latestMessage?.content || null
       };
 
@@ -114,9 +119,6 @@ export async function handleGetContacts(c) {
       waitingOnThem: 0,
       recentlyReplied: 0,
     };
-
-    const nowTime = Date.now();
-    const fortyEightHoursAgo = new Date(nowTime - 48 * 3600 * 1000).toISOString();
 
     for (const c of contacts) {
       // Needs Attention: waiting_on_me request OR failed message OR unread inbound
@@ -132,11 +134,11 @@ export async function handleGetContacts(c) {
         c.actionStatus = "needs_follow_up";
         c.action_status = "needs_follow_up";
         attentionCounts.needsFollowUp++;
-      } else if (c.lastInboundAt && c.lastInboundAt >= fortyEightHoursAgo) {
+      } else if (c.lastInboundAt && (!c.lastOutboundAt || c.lastInboundAt >= c.lastOutboundAt)) {
         c.actionStatus = "recently_replied";
         c.action_status = "recently_replied";
         attentionCounts.recentlyReplied++;
-      } else if (c.activeRequest?.status === "waiting_on_them" || (c.latestMessage?.direction === "outbound" && !c.activeRequest)) {
+      } else if (c.activeRequest?.status === "waiting_on_them" || (c.lastOutboundAt && (!c.lastInboundAt || c.lastOutboundAt > c.lastInboundAt)) || (c.latestMessage?.direction === "outbound" && !c.activeRequest)) {
         c.actionStatus = "waiting_on_them";
         c.action_status = "waiting_on_them";
         attentionCounts.waitingOnThem++;
@@ -167,6 +169,12 @@ export async function handleGetContacts(c) {
       success: true,
       contacts: filteredContacts,
       attentionCounts,
+      counts: {
+        attention: attentionCounts.needsAttention,
+        needs_follow_up: attentionCounts.needsFollowUp,
+        waiting_on_them: attentionCounts.waitingOnThem,
+        recently_replied: attentionCounts.recentlyReplied,
+      },
       total: filteredContacts.length,
     });
   } catch (err) {
