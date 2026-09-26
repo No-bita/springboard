@@ -63,11 +63,11 @@ export async function handleGoogleAuthInitiate(c) {
     state: signedState,
   });
 
-  const targetUrl = `${GOOGLE_AUTH_ENDPOINT}?${authParams.toString()}`;
+  const authorizationUrl = `${GOOGLE_AUTH_ENDPOINT}?${authParams.toString()}`;
 
-  // Set cookie and redirect
+  // Set PKCE cookie and return authorizationUrl JSON for client-side navigation
   c.header("Set-Cookie", cookieHeader);
-  return c.redirect(targetUrl);
+  return c.json({ authorizationUrl });
 }
 
 /**

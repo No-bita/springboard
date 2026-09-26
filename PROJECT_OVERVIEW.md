@@ -116,6 +116,8 @@ users
        └── campaign_recipients (Immutable recipient snapshots, delivery & response telemetry)
 
 Supporting Ledgers:
+- google_connections: Mailbox connection ledger with encrypted refresh tokens, watch expirations & sync leases
+- gmail_unmatched_messages: Unresolved inbound email inbox for linking or contact provisioning
 - message_templates: Legacy fallback registry
 - whatsapp_messages: Meta Cloud API transport idempotency ledger
 - credit_reservations: JIT credit reserve/capture state machine
@@ -129,6 +131,18 @@ Supporting Ledgers:
 - `POST /api/auth/register`: Creates new user account.
 - `POST /api/auth/reset-password`: Updates user password hash securely.
 - `GET /api/user/profile`: Returns authenticated user details and workspace info.
+
+#### Gmail Read-Only Connectivity & Integrations
+- `GET /api/integrations/google/auth`: Initiates PKCE OAuth authorization flow (`Authorization: Bearer <jwt>`), sets HttpOnly PKCE cookie, and returns `{ authorizationUrl }` JSON for client-side navigation.
+- `GET /api/integrations/google/callback`: Verifies state, exchanges code, encrypts refresh token, and starts watch-before-backfill sync.
+- `GET /api/integrations/google/status`: Returns connection status, connected email, and unmatched message counter.
+- `POST /api/integrations/google/disconnect`: Revokes Google token and deletes connection.
+- `POST /api/integrations/google/sync`: Manually triggers synchronization.
+- `POST /api/webhooks/google/gmail`: Authenticated Google Cloud Pub/Sub OIDC JWT push webhook.
+- `GET /api/integrations/google/unmatched`: Lists unresolved unmatched inbound emails.
+- `POST /api/integrations/google/unmatched/:id/link`: Links unmatched email to existing contact (refetches full body & re-runs request correlation).
+- `POST /api/integrations/google/unmatched/:id/create-contact`: Provisions new contact and links email.
+- `POST /api/integrations/google/unmatched/:id/ignore`: Marks unmatched email ignored.
 
 #### Contacts & Outreach
 - `GET /api/contacts`: Returns filtered contacts list with latest message and active request summary.
@@ -168,5 +182,6 @@ Run all verification tests without external network dependencies:
 ```bash
 npm --prefix v2 run test:offline
 ```
-All 174 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
+All 186 tests execute against local mock adapters and SQLite databases to guarantee zero external latency or API quota consumption during testing.
+
 

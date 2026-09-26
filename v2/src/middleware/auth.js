@@ -9,7 +9,6 @@ export const authMiddleware = async (c, next) => {
     c.req.url.includes("localhost") ||
     c.req.url.includes("127.0.0.1");
   const authHeader = c.req.header("Authorization");
-
   if (isDev && (!authHeader || authHeader === "Bearer dev_token" || authHeader === "dev_token")) {
     c.set("user", { id: "dev-user-1", user_id: "dev-user-1", username: "DevAgent", role: "admin" });
     return next();
@@ -20,6 +19,7 @@ export const authMiddleware = async (c, next) => {
   }
 
   const token = authHeader.split(" ")[1];
+
   try {
     const secret = c.env.JWT_SECRET || "default_unsafe_secret_for_dev_only";
     const payload = await verify(token, secret, "HS256");

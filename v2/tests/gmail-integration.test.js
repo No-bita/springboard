@@ -18,6 +18,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { sign } from "hono/jwt";
+import app from "../src/index.js";
 import {
   encryptToken,
   decryptToken,
@@ -580,5 +582,94 @@ test("Deep Gmail Read-Only Invariant Test Suite", async (t) => {
     assert.strictEqual(resB.isUnmatched, true);
     assert.strictEqual(db.store.gmail_unmatched_messages.length, 1);
     assert.strictEqual(db.store.gmail_unmatched_messages[0].from_email, "new_lead@unknown.com");
+  });
+
+  // 9. Browser-Safe OAuth Initiation Invariants
+  await t.test("9. Browser-safe Gmail OAuth initiation strictly enforces Authorization Bearer header, rejects ?token=<jwt>, keeps PKCE verifier in cookie, and never leaks JWT", async () => {
+    const testEnv = {
+      ENVIRONMENT: "production",
+      JWT_SECRET: secretKey,
+      ENCRYPTION_SECRET: secretKey,
+      GOOGLE_CLIENT_ID: "client_id_test_12345",
+      FRONTEND_URL: "https://crm.aaryanshah.co.in",
+      DB: {
+        prepare: () => ({
+          bind: () => ({
+            all: async () => ({ results: [] }),
+            run: async () => ({ success: true }),
+          }),
+        }),
+      },
+    };
+
+    const validUserPayload = { id: "usr_tenant_1", username: "CollectrUser1", role: "admin" };
+    const validJwt = await sign(validUserPayload, secretKey);
+
+    // 9a. Authorization: Bearer <jwt> works and returns JSON { authorizationUrl } + Set-Cookie
+    const authedRes = await app.request("https://crm.aaryanshah.co.in/api/integrations/google/auth", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${validJwt}`,
+      },
+    }, testEnv);
+
+    assert.strictEqual(authedRes.status, 200, "Initiate endpoint must return HTTP 200 OK JSON (not 302 redirect)");
+    const authedBody = await authedRes.json();
+    assert.ok(authedBody.authorizationUrl, "Must return authorizationUrl in response body");
+
+    // Proving Connect Gmail reaches Google consent URL
+    assert.ok(
+      authedBody.authorizationUrl.startsWith("https://accounts.google.com/o/oauth2/v2/auth"),
+      "Must direct browser to Google OAuth 2.0 authorization endpoint"
+    );
+    const parsedGoogleUrl = new URL(authedBody.authorizationUrl);
+    assert.strictEqual(parsedGoogleUrl.searchParams.get("client_id"), "client_id_test_12345");
+    assert.strictEqual(parsedGoogleUrl.searchParams.get("response_type"), "code");
+    assert.strictEqual(parsedGoogleUrl.searchParams.get("access_type"), "offline");
+    assert.strictEqual(parsedGoogleUrl.searchParams.get("prompt"), "consent");
+    assert.ok(parsedGoogleUrl.searchParams.get("code_challenge"), "Must contain PKCE code_challenge");
+    assert.strictEqual(parsedGoogleUrl.searchParams.get("code_challenge_method"), "S256");
+    assert.ok(parsedGoogleUrl.searchParams.get("state"), "Must contain signed state");
+
+    // Proving JWT never appears in authorizationUrl
+    assert.strictEqual(
+      authedBody.authorizationUrl.includes(validJwt),
+      false,
+      "JWT must NEVER appear in authorizationUrl"
+    );
+
+    // Proving PKCE verifier cookie is set with HttpOnly; SameSite=Lax; Secure
+    const cookieHeader = authedRes.headers.get("Set-Cookie");
+    assert.ok(cookieHeader, "Must set Set-Cookie header");
+    assert.ok(cookieHeader.includes("sb_pkce_verifier="), "Must set sb_pkce_verifier cookie");
+    assert.ok(cookieHeader.includes("HttpOnly"), "PKCE cookie must be HttpOnly");
+    assert.ok(cookieHeader.includes("SameSite=Lax"), "PKCE cookie must be SameSite=Lax");
+    assert.ok(cookieHeader.includes("Secure"), "PKCE cookie must be Secure");
+    assert.strictEqual(
+      cookieHeader.includes(validJwt),
+      false,
+      "JWT must NEVER appear in Set-Cookie header"
+    );
+
+    // 9b. ?token=<jwt> is rejected (returns 401 Unauthorized)
+    const queryTokenRes = await app.request(`https://crm.aaryanshah.co.in/api/integrations/google/auth?token=${encodeURIComponent(validJwt)}`, {
+      method: "GET",
+    }, testEnv);
+
+    assert.strictEqual(queryTokenRes.status, 401, "Query parameter ?token=<jwt> must be strictly rejected with 401");
+    const queryTokenBody = await queryTokenRes.json();
+    assert.strictEqual(queryTokenBody.error, "Unauthorized access. Please log in.");
+
+    // 9c. ?auth=<jwt> is also rejected
+    const queryAuthRes = await app.request(`https://crm.aaryanshah.co.in/api/integrations/google/auth?auth=${encodeURIComponent(validJwt)}`, {
+      method: "GET",
+    }, testEnv);
+    assert.strictEqual(queryAuthRes.status, 401, "Query parameter ?auth=<jwt> must be rejected with 401");
+
+    // 9d. Completely unauthenticated request is rejected
+    const unauthedRes = await app.request("https://crm.aaryanshah.co.in/api/integrations/google/auth", {
+      method: "GET",
+    }, testEnv);
+    assert.strictEqual(unauthedRes.status, 401, "Unauthenticated request without Authorization header must return 401");
   });
 });

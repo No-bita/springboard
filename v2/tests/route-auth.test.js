@@ -89,6 +89,19 @@ test("Route-Level Authentication, Role Matrix & Cross-Tenant Isolation Tests", a
     assert.ok(body.error);
   });
 
+  await t.test("3b. Query-parameter tokens (?token=<jwt> or ?auth=<jwt>) are strictly rejected by authMiddleware", async () => {
+    // Attempting access using URL query parameters instead of Authorization Bearer header must fail
+    const resTokenQuery = await app.request(`https://collectrr.workers.dev/api/cases?token=${encodeURIComponent(agentToken)}`, {
+      method: "GET"
+    }, env);
+    assert.equal(resTokenQuery.status, 401, "Query param ?token must be rejected with 401");
+
+    const resAuthQuery = await app.request(`https://collectrr.workers.dev/api/cases?auth=${encodeURIComponent(agentToken)}`, {
+      method: "GET"
+    }, env);
+    assert.equal(resAuthQuery.status, 401, "Query param ?auth must be rejected with 401");
+  });
+
   await t.test("4. Missing or invalid role claim (role: null or role: 'guest') accessing admin route returns 403", async () => {
     const resNullRole = await app.request("https://collectrr.workers.dev/api/admin/templates", {
       method: "POST",

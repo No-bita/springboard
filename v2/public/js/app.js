@@ -20,9 +20,11 @@ async function authFetch(url, options = {}) {
     throw new Error("Authentication required");
   }
 
+  const authHeaderVal = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+
   const headers = {
     ...options.headers,
-    'Authorization': token,
+    'Authorization': authHeaderVal,
     'Content-Type': 'application/json',
   };
 
@@ -1149,6 +1151,39 @@ async function triggerGmailManualSync() {
   } catch (_) {}
 }
 
+async function initiateGoogleConnect() {
+  const btn = el("btnConnectGmail");
+  const origText = btn ? btn.innerHTML : "Connect Gmail";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Connecting...";
+  }
+
+  try {
+    const res = await authFetch("/api/integrations/google/auth");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Unable to start Gmail connection. Please log in again.");
+      return;
+    }
+    const data = await res.json();
+    if (data.authorizationUrl) {
+      window.location.assign(data.authorizationUrl);
+    } else {
+      alert("Failed to obtain Google authorization URL.");
+    }
+  } catch (err) {
+    if (err.message !== "Authentication required" && err.message !== "Session expired. Please log in again.") {
+      alert("Error initiating Gmail connection: " + err.message);
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+    }
+  }
+}
+
 if (typeof window !== "undefined") {
   window.formatWhatsAppDeliveryStatus = formatWhatsAppDeliveryStatus;
   window.formatStatus = formatStatus;
@@ -1163,6 +1198,7 @@ if (typeof window !== "undefined") {
   window.handleLogout = handleLogout;
   window.checkGmailStatus = checkGmailStatus;
   window.triggerGmailManualSync = triggerGmailManualSync;
+  window.initiateGoogleConnect = initiateGoogleConnect;
 }
 
 // ----------------------------------------------------
