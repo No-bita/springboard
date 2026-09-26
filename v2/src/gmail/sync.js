@@ -141,7 +141,7 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
       await Promise.all(
         chunk.map(async (ref) => {
           try {
-            const fullMsg = await gmailGetMessage(accessToken, ref.id, "full", env);
+            const fullMsg = await gmailGetMessage(accessToken, ref.id, "metadata", env);
             await processSingleGmailMessage(db, conn, fullMsg, userContacts);
           } catch (msgErr) {
             console.error(`Failed to ingest message ${ref.id}:`, msgErr);
@@ -184,7 +184,7 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
           const added = h.messagesAdded || [];
           for (const item of added) {
             if (item.message?.id) {
-              const fullDeltaMsg = await gmailGetMessage(accessToken, item.message.id, "full", env);
+              const fullDeltaMsg = await gmailGetMessage(accessToken, item.message.id, "metadata", env);
               await processSingleGmailMessage(db, conn, fullDeltaMsg, userContacts);
             }
           }
@@ -256,7 +256,7 @@ export async function executePushDeltaSync(db, connectionId, incomingHistoryId, 
         if (msgId && !ingestedMsgIds.has(msgId)) {
           ingestedMsgIds.add(msgId);
           try {
-            const fullMsg = await gmailGetMessage(accessToken, msgId, "full", env);
+            const fullMsg = await gmailGetMessage(accessToken, msgId, "metadata", env);
             await processSingleGmailMessage(db, conn, fullMsg, userContacts);
           } catch (itemErr) {
             console.error(`Failed to process push message ${msgId}:`, itemErr);

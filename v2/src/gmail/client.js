@@ -106,7 +106,15 @@ export async function gmailGetMessage(accessToken, messageId, format = "full", e
     };
   }
 
-  const response = await fetch(`${GMAIL_API_BASE}/messages/${encodeURIComponent(messageId)}?format=${format}`, {
+  const url = new URL(`${GMAIL_API_BASE}/messages/${encodeURIComponent(messageId)}`);
+  url.searchParams.set("format", format);
+  if (format === "metadata") {
+    ["From", "To", "Cc", "Subject", "Date", "Message-ID", "In-Reply-To", "References"].forEach((h) => {
+      url.searchParams.append("metadataHeaders", h);
+    });
+  }
+
+  const response = await fetch(url.toString(), {
     headers: { "Authorization": `Bearer ${accessToken}` },
   });
 
