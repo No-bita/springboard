@@ -121,13 +121,13 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
     const afterEpochSeconds = Math.floor((boundaryTimestamp || (Date.now() - THIRTY_DAYS_MS)) / 1000);
     const listRes = await gmailListMessages(
       accessToken,
-      { q: `after:${afterEpochSeconds}`, maxResults: 50, pageToken },
+      { q: `after:${afterEpochSeconds}`, maxResults: 40, pageToken },
       env
     );
 
     const messageRefs = listRes.messages || [];
 
-    // 4. Batch Fetch Message Details & Correlation
+    // 4. Batch Fetch Message Details & Correlation (Concurrency = 6 for Cloudflare Free Tier socket limit)
     if (messageRefs.length > 0) {
       await db.execute({
         sql: "UPDATE google_connections SET sync_status = 'syncing', error_message = 'stage:correlate', updated_at = datetime('now') WHERE id = ?",
@@ -135,9 +135,9 @@ export async function executeBackfillBatch(db, connectionId, jobPayload, env = {
       });
     }
 
-    const CHUNK_SIZE = 5;
-    for (let i = 0; i < messageRefs.length; i += CHUNK_SIZE) {
-      const chunk = messageRefs.slice(i, i + CHUNK_SIZE);
+    const CONCURRENCY = 6;
+    for (let i = 0; i < messageRefs.length; i += CONCURRENCY) {
+      const chunk = messageRefs.slice(i, i + CONCURRENCY);
       await Promise.all(
         chunk.map(async (ref) => {
           try {
