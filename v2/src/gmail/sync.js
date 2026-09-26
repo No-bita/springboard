@@ -404,21 +404,29 @@ export async function processSingleGmailMessage(db, conn, gmailMsg, userContacts
   });
 
   const messageInserted = (insertRes?.rowsAffected ?? insertRes?.changes ?? insertRes?.meta?.changes ?? 0) > 0;
-
-  // 5. Emit Durable Domain Event
-  if (messageInserted) {
-    await emitCollectrDomainEvent(db, {
-      type: direction === "inbound" ? "EMAIL_RECEIVED" : "EMAIL_SENT",
-      userId: conn.user_id,
-      contactId: contact.id,
-      requestId,
-      messageId,
-      timestamp: parsed.canonicalDateIso,
-      snippet: parsed.snippet,
-      subject: parsed.subject,
-      direction,
+  let finalMessageId = messageId;
+  if (!messageInserted) {
+    const existingMsg = await db.execute({
+      sql: "SELECT id FROM messages WHERE user_id = ? AND provider = 'gmail' AND provider_message_id = ? LIMIT 1",
+      args: [conn.user_id, parsed.gmailMessageId],
     });
+    if (existingMsg.rows && existingMsg.rows.length > 0) {
+      finalMessageId = existingMsg.rows[0].id;
+    }
   }
+
+  // 5. Emit Durable Domain Event (Idempotent within emitCollectrDomainEvent)
+  await emitCollectrDomainEvent(db, {
+    type: direction === "inbound" ? "EMAIL_RECEIVED" : "EMAIL_SENT",
+    userId: conn.user_id,
+    contactId: contact.id,
+    requestId,
+    messageId: finalMessageId,
+    timestamp: parsed.canonicalDateIso,
+    snippet: parsed.snippet,
+    subject: parsed.subject,
+    direction,
+  });
 
   return { success: true, messageId, matchedContactId: contact.id, requestId };
 }
