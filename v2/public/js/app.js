@@ -1208,7 +1208,10 @@ function updateGmailStageBar(data) {
   const progressBar = el("stageProgressBar");
   const retryBtn = el("btnStageBarRetry");
 
-  const currentStep = data.syncStep || (data.syncStatus === "synced" ? 5 : 3);
+  const isSynced = (data.syncStatus === "synced" || data.syncStage === "synced") && !!data.lastSuccessfulSyncAt;
+  const isIdle = !isSyncing && !isError && !isSynced;
+
+  const currentStep = data.syncStep || (isSynced ? 5 : isSyncing ? 3 : 1);
   const totalSteps = data.totalSteps || 5;
 
   if (isError) {
@@ -1225,7 +1228,10 @@ function updateGmailStageBar(data) {
       stageDesc.textContent = data.errorMessage || "Failed to synchronize inbox with Google.";
       stageDesc.style.color = "#DC2626";
     }
-    if (retryBtn) retryBtn.style.display = "inline-block";
+    if (retryBtn) {
+      retryBtn.style.display = "inline-block";
+      retryBtn.textContent = "Retry";
+    }
     if (progressBar) {
       progressBar.style.width = "100%";
       progressBar.style.background = "#DC2626";
@@ -1253,8 +1259,8 @@ function updateGmailStageBar(data) {
       progressBar.style.width = pct + "%";
       progressBar.style.background = "#D97706";
     }
-  } else {
-    // Synced / Idle
+  } else if (isSynced) {
+    // Synced
     if (stageIcon) {
       stageIcon.style.background = "#E6F4ED";
       stageIcon.style.color = "#1C8C5E";
@@ -1277,6 +1283,32 @@ function updateGmailStageBar(data) {
       progressBar.style.width = "100%";
       progressBar.style.background = "#1C8C5E";
     }
+  } else {
+    // Idle / Sync Pending
+    if (stageIcon) {
+      stageIcon.style.background = "#EFF6FF";
+      stageIcon.style.color = "#1D4ED8";
+      stageIcon.innerHTML = "ℹ";
+    }
+    if (stageTitle) stageTitle.textContent = "Gmail Connected (" + (data.googleEmail || "Account") + ")";
+    if (stageCounter) {
+      stageCounter.style.display = "inline-block";
+      stageCounter.textContent = "Sync Pending";
+      stageCounter.style.background = "#EFF6FF";
+      stageCounter.style.color = "#1D4ED8";
+    }
+    if (stageDesc) {
+      stageDesc.textContent = data.syncStageLabel || "Initial 30-day message backfill pending.";
+      stageDesc.style.color = "#6E6A62";
+    }
+    if (retryBtn) {
+      retryBtn.style.display = "inline-block";
+      retryBtn.textContent = "Sync Now";
+    }
+    if (progressBar) {
+      progressBar.style.width = "20%";
+      progressBar.style.background = "#3B82F6";
+    }
   }
 
   // Render stepper chips
@@ -1291,21 +1323,41 @@ function updateGmailStageBar(data) {
         chip.style.color = "#DC2626";
         chip.style.border = "1px solid #FECACA";
         chip.textContent = "✕ " + st.label;
-      } else if (st.step < currentStep || (!isSyncing && !isError)) {
+      } else if (isSynced) {
         chip.style.background = "#E6F4ED";
         chip.style.color = "#1C8C5E";
         chip.style.border = "1px solid #D1FAE5";
         chip.textContent = "✓ " + st.label;
-      } else if (st.step === currentStep && isSyncing) {
-        chip.style.background = "#171717";
-        chip.style.color = "#FFFFFF";
-        chip.style.fontWeight = "600";
-        chip.textContent = "● " + st.label;
+      } else if (isSyncing) {
+        if (st.step < currentStep) {
+          chip.style.background = "#E6F4ED";
+          chip.style.color = "#1C8C5E";
+          chip.style.border = "1px solid #D1FAE5";
+          chip.textContent = "✓ " + st.label;
+        } else if (st.step === currentStep) {
+          chip.style.background = "#171717";
+          chip.style.color = "#FFFFFF";
+          chip.style.fontWeight = "600";
+          chip.textContent = "● " + st.label;
+        } else {
+          chip.style.background = "#F4F3EF";
+          chip.style.color = "#A39E93";
+          chip.style.border = "1px solid #ECE8DF";
+          chip.textContent = "○ " + st.label;
+        }
       } else {
-        chip.style.background = "#F4F3EF";
-        chip.style.color = "#A39E93";
-        chip.style.border = "1px solid #ECE8DF";
-        chip.textContent = "○ " + st.label;
+        // Idle / Pending
+        if (st.step === 1) {
+          chip.style.background = "#E6F4ED";
+          chip.style.color = "#1C8C5E";
+          chip.style.border = "1px solid #D1FAE5";
+          chip.textContent = "✓ " + st.label;
+        } else {
+          chip.style.background = "#F4F3EF";
+          chip.style.color = "#A39E93";
+          chip.style.border = "1px solid #ECE8DF";
+          chip.textContent = "○ " + st.label;
+        }
       }
       stepper.appendChild(chip);
     });

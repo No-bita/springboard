@@ -37,6 +37,7 @@ import {
 import { classifyRequestAttribution } from "../src/gmail/replies.js";
 import { emitCollectrDomainEvent } from "../src/events/domain.js";
 import { processSingleGmailMessage, startInitialSyncPipeline, executeBackfillBatch } from "../src/gmail/sync.js";
+import { handleGoogleStatus } from "../src/api/integrations/google.js";
 
 // In-Memory SQLite Mock Database Client
 function createMockDb() {
@@ -747,6 +748,102 @@ test("Deep Gmail Read-Only Invariant Test Suite", async (t) => {
     assert.strictEqual(concurrentBackfillRes.deferred, true, "Concurrent backfill must defer when lease is active");
 
     await releaseSyncLease(db, connectionId, leaseRes.syncOwner, null, "synced");
+  });
+
+  await t.test("12. handleGoogleStatus observational purity & strict state machine invariants", async () => {
+    const db = createMockDb();
+    const userId = "usr_tenant_status_test";
+    const connectionId = "gconn_status_test";
+
+    const sentQueueMessages = [];
+    const env = {
+      DB: db,
+      SCHEDULE_QUEUE: {
+        send: async (msg) => {
+          sentQueueMessages.push(msg);
+        },
+      },
+    };
+
+    // Helper context builder
+    function buildContext(connData) {
+      db.store.google_connections = connData ? [connData] : [];
+      return {
+        env,
+        get: (k) => (k === "user" ? { id: userId } : null),
+        json: (payload, status = 200) => ({ status, payload }),
+      };
+    }
+
+    // 12a. Idle state without last_successful_sync_at returns idle (Step 1) and sends ZERO queue messages
+    const ctxIdle = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.idle@example.com",
+      sync_status: "idle",
+      last_synced_at: null,
+      last_successful_sync_at: null,
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const resIdle = await handleGoogleStatus(ctxIdle);
+    assert.strictEqual(resIdle.payload.connected, true);
+    assert.strictEqual(resIdle.payload.syncStage, "idle");
+    assert.strictEqual(resIdle.payload.syncStep, 1);
+    assert.strictEqual(sentQueueMessages.length, 0, "GET /status must be side-effect free: NEVER enqueue backfill jobs");
+
+    // 12b. Syncing state with error_message='stage:scan' returns Stage 3
+    const ctxSyncing = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.syncing@example.com",
+      sync_status: "syncing",
+      last_synced_at: null,
+      last_successful_sync_at: null,
+      error_message: "stage:scan",
+      created_at: new Date().toISOString(),
+    });
+
+    const resSyncing = await handleGoogleStatus(ctxSyncing);
+    assert.strictEqual(resSyncing.payload.syncStage, "scan");
+    assert.strictEqual(resSyncing.payload.syncStep, 3);
+    assert.strictEqual(sentQueueMessages.length, 0);
+
+    // 12c. Error state returns Stage 0 with error details
+    const ctxError = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.error@example.com",
+      sync_status: "error",
+      last_synced_at: null,
+      last_successful_sync_at: null,
+      error_message: "OAuth token revoked",
+      created_at: new Date().toISOString(),
+    });
+
+    const resError = await handleGoogleStatus(ctxError);
+    assert.strictEqual(resError.payload.syncStage, "error");
+    assert.strictEqual(resError.payload.syncStep, 0);
+    assert.strictEqual(resError.payload.errorMessage, "OAuth token revoked");
+    assert.strictEqual(sentQueueMessages.length, 0);
+
+    // 12d. Synced state requires last_successful_sync_at
+    const ctxSynced = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.synced@example.com",
+      sync_status: "synced",
+      last_synced_at: "2026-09-26T10:00:00Z",
+      last_successful_sync_at: "2026-09-26T10:00:00Z",
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const resSynced = await handleGoogleStatus(ctxSynced);
+    assert.strictEqual(resSynced.payload.syncStage, "synced");
+    assert.strictEqual(resSynced.payload.syncStep, 5);
+    assert.strictEqual(sentQueueMessages.length, 0);
   });
 });
 

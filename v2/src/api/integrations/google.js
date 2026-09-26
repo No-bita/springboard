@@ -303,13 +303,10 @@ export async function handleGoogleStatus(c) {
     syncStageLabel = "Real-time inbox watch active";
     syncStep = 5;
   } else {
-    // Initial backfill has not completed yet: auto-trigger pipeline
-    syncStage = "scan";
-    syncStageLabel = "Initial inbox sync in progress...";
-    syncStep = 2;
-    try {
-      await startInitialSyncPipeline(db, conn.id, c.env);
-    } catch (_) {}
+    // Purely observational: idle state when backfill has not completed
+    syncStage = "idle";
+    syncStageLabel = "Initial inbox sync pending";
+    syncStep = 1;
   }
 
   return c.json({
