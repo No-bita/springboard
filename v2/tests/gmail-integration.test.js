@@ -36,7 +36,7 @@ import {
 } from "../src/gmail/matcher.js";
 import { classifyRequestAttribution } from "../src/gmail/replies.js";
 import { emitCollectrDomainEvent } from "../src/events/domain.js";
-import { processSingleGmailMessage, startInitialSyncPipeline } from "../src/gmail/sync.js";
+import { processSingleGmailMessage, startInitialSyncPipeline, executeBackfillBatch } from "../src/gmail/sync.js";
 
 // In-Memory SQLite Mock Database Client
 function createMockDb() {
@@ -163,6 +163,19 @@ function createMockDb() {
           conn.error_message = errMsg;
           if (historyId) conn.history_id = historyId;
           conn.last_successful_sync_at = new Date().toISOString();
+          return { rowsAffected: 1 };
+        }
+        return { rowsAffected: 0 };
+      }
+
+      // UPDATE google_connections (startInitialSyncPipeline)
+      if (sqlTrim.startsWith("UPDATE google_connections") && sqlTrim.includes("SET history_id = ?")) {
+        const [histId, expAt, connId] = args;
+        const conn = store.google_connections.find((c) => c.id === connId);
+        if (conn) {
+          conn.history_id = histId;
+          conn.watch_expiration_at = expAt;
+          conn.sync_status = "syncing";
           return { rowsAffected: 1 };
         }
         return { rowsAffected: 0 };
@@ -672,4 +685,68 @@ test("Deep Gmail Read-Only Invariant Test Suite", async (t) => {
     }, testEnv);
     assert.strictEqual(unauthedRes.status, 401, "Unauthenticated request without Authorization header must return 401");
   });
+
+  // 10. Historical Backfill Pipeline Invariants
+  await t.test("10. 30-Day Historical Backfill pipeline runs safely, paginates bounded messages, respects sync lease concurrency, and advances to 'synced' state", async () => {
+    const db = createMockDb();
+    const testSecret = "collectr_dev_secret_key_32_bytes!!";
+    const encryptedToken = await encryptToken("mock_refresh_token_abc", testSecret);
+
+    const connectionId = "gconn_backfill_test_001";
+    db.store.google_connections.push({
+      id: connectionId,
+      user_id: "usr_tenant_1",
+      google_email: "test.backfill@example.com",
+      encrypted_refresh_token: encryptedToken,
+      sync_status: "idle",
+      history_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const env = {
+      ENVIRONMENT: "test",
+      ENCRYPTION_SECRET: testSecret,
+      GOOGLE_PUBSUB_TOPIC: "projects/springboard/topics/gmail-inbox-watch",
+      SCHEDULE_QUEUE: {
+        sentMessages: [],
+        send: async (msg) => {
+          env.SCHEDULE_QUEUE.sentMessages.push(msg);
+        },
+      },
+    };
+
+    // 10a. startInitialSyncPipeline registers watch, records baseline H0, and enqueues backfill
+    const initRes = await startInitialSyncPipeline(db, connectionId, env);
+    assert.strictEqual(initRes.success, true);
+    assert.strictEqual(initRes.baselineHistoryId, "100001");
+
+    const connAfterInit = db.store.google_connections.find((c) => c.id === connectionId);
+    assert.strictEqual(connAfterInit.sync_status, "syncing");
+    assert.strictEqual(connAfterInit.history_id, "100001");
+    assert.strictEqual(env.SCHEDULE_QUEUE.sentMessages.length, 1);
+    assert.strictEqual(env.SCHEDULE_QUEUE.sentMessages[0].type, "GMAIL_BACKFILL_SYNC");
+    assert.strictEqual(env.SCHEDULE_QUEUE.sentMessages[0].baselineHistoryId, "100001");
+
+    // 10b. executeBackfillBatch acquires lease and executes terminal page to completion
+    const jobPayload = env.SCHEDULE_QUEUE.sentMessages[0];
+    const backfillRes = await executeBackfillBatch(db, connectionId, jobPayload, env);
+    assert.strictEqual(backfillRes.completed, true);
+
+    const connAfterBackfill = db.store.google_connections.find((c) => c.id === connectionId);
+    assert.strictEqual(connAfterBackfill.sync_status, "synced");
+    assert.strictEqual(connAfterBackfill.sync_lease_until, null, "Lease must be cleanly released upon completion");
+    assert.strictEqual(connAfterBackfill.sync_owner, null);
+    assert.ok(connAfterBackfill.last_successful_sync_at, "last_successful_sync_at must be populated");
+
+    // 10c. Concurrency guard: If lease is active, a concurrent worker defers safely
+    const leaseRes = await acquireSyncLease(db, connectionId, 300);
+    assert.strictEqual(leaseRes.acquired, true);
+
+    const concurrentBackfillRes = await executeBackfillBatch(db, connectionId, jobPayload, env);
+    assert.strictEqual(concurrentBackfillRes.deferred, true, "Concurrent backfill must defer when lease is active");
+
+    await releaseSyncLease(db, connectionId, leaseRes.syncOwner, null, "synced");
+  });
 });
+
