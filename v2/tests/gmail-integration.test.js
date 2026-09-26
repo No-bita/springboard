@@ -844,6 +844,39 @@ test("Deep Gmail Read-Only Invariant Test Suite", async (t) => {
     assert.strictEqual(resSynced.payload.syncStage, "synced");
     assert.strictEqual(resSynced.payload.syncStep, 5);
     assert.strictEqual(sentQueueMessages.length, 0);
+
+    // 12e. Sync Health Invariant: 'synced' requires last_successful_sync_at IS NOT NULL
+    const ctxPrematureSynced = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.premature@example.com",
+      sync_status: "synced",
+      last_synced_at: null,
+      last_successful_sync_at: null,
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const resPremature = await handleGoogleStatus(ctxPrematureSynced);
+    assert.strictEqual(resPremature.payload.syncStage, "idle", "Cannot report synced without positive last_successful_sync_at");
+    assert.strictEqual(resPremature.payload.syncStep, 1);
+
+    // 12f. Unexpected termination / error overrides historical last_successful_sync_at
+    const ctxInterrupted = buildContext({
+      id: connectionId,
+      user_id: userId,
+      google_email: "test.interrupted@example.com",
+      sync_status: "error",
+      last_synced_at: "2026-09-26T09:00:00Z",
+      last_successful_sync_at: "2026-09-26T09:00:00Z",
+      error_message: "Rate limit exceeded",
+      created_at: new Date().toISOString(),
+    });
+
+    const resInterrupted = await handleGoogleStatus(ctxInterrupted);
+    assert.strictEqual(resInterrupted.payload.syncStage, "error");
+    assert.strictEqual(resInterrupted.payload.syncStep, 0);
+    assert.strictEqual(resInterrupted.payload.errorMessage, "Rate limit exceeded");
   });
 });
 
