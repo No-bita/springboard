@@ -11,7 +11,7 @@ const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
  * Subscribes to Gmail mailbox push notifications via Google Cloud Pub/Sub.
  */
 export async function gmailWatch(accessToken, topicName, env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock) {
     return {
       historyId: "100001",
@@ -43,7 +43,7 @@ export async function gmailWatch(accessToken, topicName, env = {}) {
  * Stops Gmail mailbox push notifications.
  */
 export async function gmailStopWatch(accessToken, env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock) return { success: true };
 
   const response = await fetch(`${GMAIL_API_BASE}/stop`, {
@@ -58,7 +58,7 @@ export async function gmailStopWatch(accessToken, env = {}) {
  * Lists messages matching a search query (e.g. after:YYYY/MM/DD).
  */
 export async function gmailListMessages(accessToken, { q, maxResults = 50, pageToken = null }, env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock) {
     return {
       messages: [],
@@ -87,7 +87,7 @@ export async function gmailListMessages(accessToken, { q, maxResults = 50, pageT
  * Retrieves single message details (headers, snippets, body payload).
  */
 export async function gmailGetMessage(accessToken, messageId, format = "full", env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock) {
     return {
       id: messageId,
@@ -124,7 +124,7 @@ export async function gmailGetMessage(accessToken, messageId, format = "full", e
  * Lists history records since a starting historyId.
  */
 export async function gmailListHistory(accessToken, { startHistoryId, maxResults = 100, pageToken = null }, env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock) {
     return {
       history: [],

@@ -75,141 +75,146 @@ export async function handleGoogleAuthInitiate(c) {
  * Exchanges authorization code, encrypts refresh token, stores connection, and triggers watch/backfill.
  */
 export async function handleGoogleAuthCallback(c) {
-  const db = getDbClient(c.env);
-  const secretKey = c.env.ENCRYPTION_SECRET || c.env.JWT_SECRET || "collectr_dev_secret_key_32_bytes!!";
-  const clientId = c.env.GOOGLE_CLIENT_ID;
-  const clientSecret = c.env.GOOGLE_CLIENT_SECRET;
-  const frontendUrl = c.env.FRONTEND_URL || "https://crm.aaryanshah.co.in";
-  const redirectUri = `${frontendUrl}/api/integrations/google/callback`;
-  const isMock = c.env.MOCK_GMAIL === "true" || c.env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  try {
+    const db = getDbClient(c.env);
+    const secretKey = c.env.ENCRYPTION_SECRET || c.env.JWT_SECRET || "collectr_dev_secret_key_32_bytes!!";
+    const clientId = c.env.GOOGLE_CLIENT_ID;
+    const clientSecret = c.env.GOOGLE_CLIENT_SECRET;
+    const frontendUrl = c.env.FRONTEND_URL || "https://crm.aaryanshah.co.in";
+    const redirectUri = `${frontendUrl}/api/integrations/google/callback`;
+    const isMock = c.env.MOCK_GMAIL === "true" || c.env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
 
-  const code = c.req.query("code");
-  const signedState = c.req.query("state");
-  const error = c.req.query("error");
+    const code = c.req.query("code");
+    const signedState = c.req.query("state");
+    const error = c.req.query("error");
 
-  if (error) {
-    return c.redirect(`/dashboard.html?error=${encodeURIComponent("Google connection cancelled: " + error)}`);
-  }
-
-  if (!code || !signedState) {
-    return c.json({ error: "Missing authorization code or state parameter." }, 400);
-  }
-
-  // 1. Verify signed state
-  const statePayload = await verifyOAuthState(signedState, secretKey);
-  if (!statePayload || !statePayload.user_id) {
-    return c.json({ error: "Invalid or expired OAuth state parameter." }, 400);
-  }
-
-  const stateAge = Date.now() - Number(statePayload.issued_at || 0);
-  if (stateAge > 10 * 60 * 1000) {
-    return c.json({ error: "OAuth session timed out. Please try connecting again." }, 400);
-  }
-
-  const userId = statePayload.user_id;
-
-  // 2. Read code_verifier from HttpOnly cookie
-  const cookieHeader = c.req.header("Cookie") || "";
-  const match = cookieHeader.match(/sb_pkce_verifier=([^;]+)/);
-  let codeVerifier = match ? decodeURIComponent(match[1]) : null;
-
-  // Test mode fallback
-  if (!codeVerifier && isMock) {
-    codeVerifier = "mock_test_code_verifier";
-  }
-
-  if (!codeVerifier && !isMock) {
-    return c.json({ error: "PKCE verification failed: verifier cookie missing or expired." }, 400);
-  }
-
-  let plainRefreshToken = "mock_refresh_token_xyz";
-  let googleSubjectId = "google_sub_123456";
-  let googleEmail = "connected_user@gmail.com";
-
-  if (!isMock) {
-    // 3. Exchange code at Google token endpoint
-    const tokenParams = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      code_verifier: codeVerifier,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-    });
-
-    const tokenRes = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: tokenParams.toString(),
-    });
-
-    if (!tokenRes.ok) {
-      const errText = await tokenRes.text().catch(() => "");
-      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Token exchange failed: " + errText)}`);
+    if (error) {
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Google connection cancelled: " + error)}`);
     }
 
-    const tokenData = await tokenRes.json();
-    plainRefreshToken = tokenData.refresh_token;
-
-    // 4. Fetch Google User Profile for stable identity and verified email
-    const userinfoRes = await fetch(GOOGLE_USERINFO_ENDPOINT, {
-      headers: { "Authorization": `Bearer ${tokenData.access_token}` },
-    });
-
-    if (!userinfoRes.ok) {
-      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Failed to fetch Google user profile")}`);
+    if (!code || !signedState) {
+      return c.json({ error: "Missing authorization code or state parameter." }, 400);
     }
 
-    const profile = await userinfoRes.json();
-    googleSubjectId = profile.id;
-    googleEmail = (profile.email || "").trim().toLowerCase();
-  }
+    // 1. Verify signed state
+    const statePayload = await verifyOAuthState(signedState, secretKey);
+    if (!statePayload || !statePayload.user_id) {
+      return c.json({ error: "Invalid or expired OAuth state parameter." }, 400);
+    }
 
-  if (!plainRefreshToken) {
-    return c.redirect(`/dashboard.html?error=${encodeURIComponent("No refresh token received from Google. Please reconnect with consent prompt.")}`);
-  }
+    const stateAge = Date.now() - Number(statePayload.issued_at || 0);
+    if (stateAge > 10 * 60 * 1000) {
+      return c.json({ error: "OAuth session timed out. Please try connecting again." }, 400);
+    }
 
-  // 5. Encrypt refresh token using AES-GCM-256
-  const encryptedRefreshToken = await encryptToken(plainRefreshToken, secretKey);
-  const connectionId = "gconn_" + crypto.randomUUID();
+    const userId = statePayload.user_id;
 
-  // 6. Global mailbox uniqueness check & Upsert
-  try {
-    await db.execute({
-      sql: `INSERT INTO google_connections (
-        id, user_id, google_subject_id, google_email, encrypted_refresh_token,
-        scope, sync_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'syncing', datetime('now'), datetime('now'))
-      ON CONFLICT(google_email) DO UPDATE SET
-        user_id = excluded.user_id,
-        google_subject_id = excluded.google_subject_id,
-        encrypted_refresh_token = excluded.encrypted_refresh_token,
-        sync_status = 'syncing',
-        updated_at = datetime('now')`,
-      args: [connectionId, userId, googleSubjectId, googleEmail, encryptedRefreshToken, GMAIL_SCOPES],
+    // 2. Read code_verifier from HttpOnly cookie
+    const cookieHeader = c.req.header("Cookie") || "";
+    const match = cookieHeader.match(/sb_pkce_verifier=([^;]+)/);
+    let codeVerifier = match ? decodeURIComponent(match[1]) : null;
+
+    // Test mode fallback
+    if (!codeVerifier && isMock) {
+      codeVerifier = "mock_test_code_verifier";
+    }
+
+    if (!codeVerifier && !isMock) {
+      return c.json({ error: "PKCE verification failed: verifier cookie missing or expired." }, 400);
+    }
+
+    let plainRefreshToken = "mock_refresh_token_xyz";
+    let googleSubjectId = "google_sub_123456";
+    let googleEmail = "connected_user@gmail.com";
+
+    if (!isMock) {
+      // 3. Exchange code at Google token endpoint
+      const tokenParams = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        code_verifier: codeVerifier,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      });
+
+      const tokenRes = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: tokenParams.toString(),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text().catch(() => "");
+        return c.redirect(`/dashboard.html?error=${encodeURIComponent("Token exchange failed: " + errText)}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      plainRefreshToken = tokenData.refresh_token;
+
+      // 4. Fetch Google User Profile for stable identity and verified email
+      const userinfoRes = await fetch(GOOGLE_USERINFO_ENDPOINT, {
+        headers: { "Authorization": `Bearer ${tokenData.access_token}` },
+      });
+
+      if (!userinfoRes.ok) {
+        return c.redirect(`/dashboard.html?error=${encodeURIComponent("Failed to fetch Google user profile")}`);
+      }
+
+      const profile = await userinfoRes.json();
+      googleSubjectId = profile.id;
+      googleEmail = (profile.email || "").trim().toLowerCase();
+    }
+
+    if (!plainRefreshToken) {
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("No refresh token received from Google. Please reconnect with consent prompt.")}`);
+    }
+
+    // 5. Encrypt refresh token using AES-GCM-256
+    const encryptedRefreshToken = await encryptToken(plainRefreshToken, secretKey);
+    const connectionId = "gconn_" + crypto.randomUUID();
+
+    // 6. Global mailbox uniqueness check & Upsert
+    try {
+      await db.execute({
+        sql: `INSERT INTO google_connections (
+          id, user_id, google_subject_id, google_email, encrypted_refresh_token,
+          scope, sync_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'syncing', datetime('now'), datetime('now'))
+        ON CONFLICT(google_email) DO UPDATE SET
+          user_id = excluded.user_id,
+          google_subject_id = excluded.google_subject_id,
+          encrypted_refresh_token = excluded.encrypted_refresh_token,
+          sync_status = 'syncing',
+          updated_at = datetime('now')`,
+        args: [connectionId, userId, googleSubjectId, googleEmail, encryptedRefreshToken, GMAIL_SCOPES],
+      });
+    } catch (dbErr) {
+      console.error("Failed to store google connection:", dbErr);
+      return c.redirect(`/dashboard.html?error=${encodeURIComponent("Database error saving connection")}`);
+    }
+
+    // Fetch actual saved connection ID
+    const savedConn = await db.execute({
+      sql: "SELECT id FROM google_connections WHERE google_email = ? LIMIT 1",
+      args: [googleEmail],
     });
-  } catch (dbErr) {
-    console.error("Failed to store google connection:", dbErr);
-    return c.redirect(`/dashboard.html?error=${encodeURIComponent("Database error saving connection")}`);
+    const effectiveConnId = savedConn.rows[0]?.id || connectionId;
+
+    // 7. Trigger Watch-before-Backfill pipeline asynchronously
+    try {
+      await startInitialSyncPipeline(db, effectiveConnId, c.env);
+    } catch (syncErr) {
+      console.error("Failed to trigger initial sync pipeline:", syncErr);
+    }
+
+    // Clear PKCE cookie and redirect back to dashboard
+    c.header("Set-Cookie", "sb_pkce_verifier=; HttpOnly; SameSite=Lax; Path=/api/integrations/google; Max-Age=0");
+    return c.redirect("/dashboard.html?connected=gmail");
+  } catch (fatalErr) {
+    console.error("Fatal Google auth callback error:", fatalErr);
+    return c.redirect(`/dashboard.html?error=${encodeURIComponent("Connection failed: " + (fatalErr.message || "Unknown error"))}`);
   }
-
-  // Fetch actual saved connection ID
-  const savedConn = await db.execute({
-    sql: "SELECT id FROM google_connections WHERE google_email = ? LIMIT 1",
-    args: [googleEmail],
-  });
-  const effectiveConnId = savedConn.rows[0]?.id || connectionId;
-
-  // 7. Trigger Watch-before-Backfill pipeline asynchronously
-  try {
-    await startInitialSyncPipeline(db, effectiveConnId, c.env);
-  } catch (syncErr) {
-    console.error("Failed to trigger initial sync pipeline:", syncErr);
-  }
-
-  // Clear PKCE cookie and redirect back to dashboard
-  c.header("Set-Cookie", "sb_pkce_verifier=; HttpOnly; SameSite=Lax; Path=/api/integrations/google; Max-Age=0");
-  return c.redirect("/dashboard.html?connected=gmail");
 }
 
 /**

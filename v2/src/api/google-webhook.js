@@ -15,7 +15,7 @@ import { executePushDeltaSync } from "../gmail/sync.js";
  * Validates a Google Pub/Sub OIDC JWT bearer token.
  */
 async function verifyGooglePubSubJwt(authHeader, env) {
-  const isTest = env.ENVIRONMENT === "test" || env.MOCK_GMAIL === "true" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isTest = env.ENVIRONMENT === "test" || env.MOCK_GMAIL === "true" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     if (isTest) return true; // Allow test suite pass
     return false;

@@ -16,7 +16,7 @@ const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
  */
 export async function getEphemeralAccessToken(db, connectionId, env = {}) {
   const secretKey = env.ENCRYPTION_SECRET || env.JWT_SECRET || "collectr_dev_secret_key_32_bytes!!";
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
 
   if (isMock) {
     return {
@@ -79,7 +79,7 @@ export async function getEphemeralAccessToken(db, connectionId, env = {}) {
  * Revokes a refresh token with Google Identity endpoint.
  */
 export async function revokeGoogleToken(plainRefreshToken, env = {}) {
-  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || process?.env?.NO_EXTERNAL_NETWORK === "true";
+  const isMock = env.MOCK_GMAIL === "true" || env.ENVIRONMENT === "test" || (typeof process !== "undefined" && process?.env?.NO_EXTERNAL_NETWORK === "true");
   if (isMock || !plainRefreshToken) {
     return { success: true, mock: true };
   }
